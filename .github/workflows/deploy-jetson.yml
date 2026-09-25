@@ -1,0 +1,104 @@
+# ubuntu-latest joins the tailnet, then rsyncs this checkout to the Jetson
+# over its Tailscale address. Same device as RoomMind (nano0 @ 100.67.56.41).
+# Create a reusable auth key in the Tailscale admin console and store it as
+# TAILSCALE_AUTHKEY. JETSON_SSH_KEY is the deploy key.
+#
+# This repo is deployed beside RoomMind, not into ~/Projects/lerobot.
+# That directory is the Hugging Face lerobot checkout and must stay intact.
+name: Deploy to Jetson
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: jetson-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Sync to Jetson Orin Nano
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      DEPLOY_HOST: nano0@100.67.56.41
+      DEPLOY_DIR: /home/nano0/Projects/pi0-lerobot-finetune-deploy
+      REPO_URL: git@github.com:2p1c/pi0-lerobot-finetune-deploy.git
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          ping: "100.67.56.41"
+
+      - name: Ensure repository on Jetson
+        env:
+          SSH_KEY: ${{ secrets.JETSON_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H 100.67.56.41 >> ~/.ssh/known_hosts
+          ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes "$DEPLOY_HOST" \
+            "DEPLOY_DIR='$DEPLOY_DIR' REPO_URL='$REPO_URL' bash -s" <<'EOF'
+          set -euo pipefail
+          if [ -d "$DEPLOY_DIR/.git" ]; then
+            exit 0
+          fi
+          if [ -e "$DEPLOY_DIR" ]; then
+            echo "DEPLOY_DIR exists but is not a git checkout: $DEPLOY_DIR" >&2
+            exit 1
+          fi
+          mkdir -p "$(dirname "$DEPLOY_DIR")"
+          ok=0
+          for attempt in 1 2 3 4 5 6 7 8; do
+            echo "git clone attempt ${attempt}"
+            if git clone "$REPO_URL" "$DEPLOY_DIR"; then
+              ok=1
+              break
+            fi
+            rm -rf "$DEPLOY_DIR"
+            echo "attempt ${attempt} failed, retry in 15s"
+            sleep 15
+          done
+          test "$ok" -eq 1
+          EOF
+
+      - name: Sync repository
+        env:
+          SSH_KEY: ${{ secrets.JETSON_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          rsync -az --delete \
+            --exclude '.git/' \
+            --exclude '.venv/' \
+            --exclude '__pycache__/' \
+            -e "ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes" \
+            ./ "${DEPLOY_HOST}:${DEPLOY_DIR}/"
+          ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes "$DEPLOY_HOST" \
+            "DEPLOY_DIR='$DEPLOY_DIR' bash -s" <<'EOF'
+          set -euo pipefail
+          cd "$DEPLOY_DIR"
+          ok=0
+          for attempt in 1 2 3 4 5 6 7 8; do
+            echo "git fetch attempt ${attempt}"
+            if git fetch origin main; then
+              ok=1
+              break
+            fi
+            echo "attempt ${attempt} failed, retry in 15s"
+            sleep 15
+          done
+          test "$ok" -eq 1
+          git reset --hard origin/main
+          git log -1 --oneline
+          git status -sb
+          EOF
