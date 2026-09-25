@@ -1,8 +1,13 @@
 """Record an SO-101 dataset.
 
-Adapted from the API example in:
-https://huggingface.co/docs/lerobot/main/en/il_robots
+The control loop runs on the Jetson. Rerun on the local computer only displays
+the stream. Frames are always written on the Jetson first; --save-to mac
+copies the finished dataset to the computer afterwards.
 """
+
+import argparse
+import subprocess
+from pathlib import Path
 
 from lerobot.cameras.opencv import OpenCVCameraConfig
 from lerobot.common.control_utils import init_keyboard_listener
@@ -14,11 +19,11 @@ from lerobot.teleoperators.so_leader.config_so_leader import SO101LeaderConfig
 from lerobot.teleoperators.so_leader.so_leader import SO101Leader
 from lerobot.utils.feature_utils import hw_to_dataset_features
 from lerobot.utils.utils import log_say
-from lerobot.utils.visualization_utils import init_visualization
+from lerobot.utils.visualization_utils import init_visualization, shutdown_visualization
 
-FOLLOWER_PORT = "/dev/ttyACM1"
+FOLLOWER_PORT = "/dev/ttyACM0"
 FOLLOWER_ID = "YutongZhu_awesome_follower_arm"
-LEADER_PORT = "/dev/ttyACM0"
+LEADER_PORT = "/dev/ttyACM1"
 LEADER_ID = "YutongZhu_awesome_leader_arm"
 
 NUM_EPISODES = 5
@@ -27,16 +32,52 @@ EPISODE_TIME_SEC = 60
 RESET_TIME_SEC = 10
 TASK_DESCRIPTION = "My task description"
 REPO_ID = "yutongzhu/record-test"
+RERUN_IP = "192.168.18.9"
+RERUN_PORT = 9876
+MAC_HOST = "zyt@192.168.18.9"
+MAC_DIR = "/Users/zyt/lerobot-datasets"
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Record an SO-101 dataset while watching it in Rerun.")
+    parser.add_argument(
+        "--no-camera",
+        action="store_true",
+        help="Do not open the camera. The dataset stores joint data only.",
+    )
+    parser.add_argument(
+        "--save-to",
+        choices=("board", "mac"),
+        default="board",
+        help="board keeps the dataset on the Jetson. mac copies it to the computer after recording.",
+    )
+    parser.add_argument("--rerun-ip", default=RERUN_IP, help="IP of the computer running the Rerun viewer.")
+    parser.add_argument("--rerun-port", type=int, default=RERUN_PORT)
+    parser.add_argument("--mac-host", default=MAC_HOST, help="SSH target used when --save-to mac.")
+    parser.add_argument("--mac-dir", default=MAC_DIR, help="Directory on the computer used when --save-to mac.")
+    return parser.parse_args()
+
+
+def copy_dataset_to_mac(dataset_root: Path, mac_host: str, mac_dir: str, repo_id: str) -> None:
+    remote_dir = f"{mac_dir.rstrip('/')}/{repo_id}"
+    print(f"Copying dataset to {mac_host}:{remote_dir}")
+    subprocess.run(["ssh", mac_host, "mkdir", "-p", remote_dir], check=True)
+    subprocess.run(["rsync", "-az", f"{dataset_root}/", f"{mac_host}:{remote_dir}/"], check=True)
+    print(f"Dataset copied to {mac_host}:{remote_dir}")
 
 
 def main():
+    args = parse_args()
+    cameras = {}
+    if not args.no_camera:
+        cameras = {
+            "wrist": OpenCVCameraConfig(index_or_path=0, width=640, height=480, fps=30),
+        }
+
     robot_config = SO101FollowerConfig(
         port=FOLLOWER_PORT,
         id=FOLLOWER_ID,
-        cameras={
-            "wrist": OpenCVCameraConfig(index_or_path=0, width=640, height=480, fps=30),
-            "top": OpenCVCameraConfig(index_or_path=1, width=640, height=480, fps=30),
-        },
+        cameras=cameras,
     )
     teleop_config = SO101LeaderConfig(
         port=LEADER_PORT,
@@ -58,35 +99,27 @@ def main():
         use_videos=True,
         image_writer_threads=4,
     )
+    dataset_root = Path(dataset.root)
+    print(f"Recording on the Jetson at {dataset_root}")
 
     _, events = init_keyboard_listener()
-    init_visualization("rerun", session_name="recording")
+    init_visualization(
+        "rerun",
+        session_name="recording",
+        ip=args.rerun_ip,
+        port=args.rerun_port,
+    )
 
     robot.connect()
     teleop.connect()
 
     teleop_action_processor, robot_action_processor, robot_observation_processor = make_default_processors()
 
-    episode_idx = 0
-    while episode_idx < NUM_EPISODES and not events["stop_recording"]:
-        log_say(f"Recording episode {episode_idx + 1} of {NUM_EPISODES}")
+    try:
+        episode_idx = 0
+        while episode_idx < NUM_EPISODES and not events["stop_recording"]:
+            log_say(f"Recording episode {episode_idx + 1} of {NUM_EPISODES}")
 
-        record_loop(
-            robot=robot,
-            events=events,
-            fps=FPS,
-            teleop_action_processor=teleop_action_processor,
-            robot_action_processor=robot_action_processor,
-            robot_observation_processor=robot_observation_processor,
-            teleop=teleop,
-            dataset=dataset,
-            control_time_s=EPISODE_TIME_SEC,
-            single_task=TASK_DESCRIPTION,
-            display_data=True,
-        )
-
-        if not events["stop_recording"] and (episode_idx < NUM_EPISODES - 1 or events["rerecord_episode"]):
-            log_say("Reset the environment")
             record_loop(
                 robot=robot,
                 events=events,
@@ -95,27 +128,49 @@ def main():
                 robot_action_processor=robot_action_processor,
                 robot_observation_processor=robot_observation_processor,
                 teleop=teleop,
-                control_time_s=RESET_TIME_SEC,
+                dataset=dataset,
+                control_time_s=EPISODE_TIME_SEC,
                 single_task=TASK_DESCRIPTION,
                 display_data=True,
             )
 
-        if events["rerecord_episode"]:
-            log_say("Re-recording episode")
-            events["rerecord_episode"] = False
-            events["exit_early"] = False
-            dataset.clear_episode_buffer()
-            continue
+            if not events["stop_recording"] and (episode_idx < NUM_EPISODES - 1 or events["rerecord_episode"]):
+                log_say("Reset the environment")
+                record_loop(
+                    robot=robot,
+                    events=events,
+                    fps=FPS,
+                    teleop_action_processor=teleop_action_processor,
+                    robot_action_processor=robot_action_processor,
+                    robot_observation_processor=robot_observation_processor,
+                    teleop=teleop,
+                    control_time_s=RESET_TIME_SEC,
+                    single_task=TASK_DESCRIPTION,
+                    display_data=True,
+                )
 
-        dataset.save_episode()
-        episode_idx += 1
+            if events["rerecord_episode"]:
+                log_say("Re-recording episode")
+                events["rerecord_episode"] = False
+                events["exit_early"] = False
+                dataset.clear_episode_buffer()
+                continue
 
-    log_say("Finalizing dataset...")
-    dataset.finalize()
-    log_say("Stop recording")
-    robot.disconnect()
-    teleop.disconnect()
-    dataset.push_to_hub()
+            dataset.save_episode()
+            episode_idx += 1
+
+        log_say("Finalizing dataset...")
+        dataset.finalize()
+        if args.save_to == "mac":
+            copy_dataset_to_mac(dataset_root, args.mac_host, args.mac_dir, REPO_ID)
+        dataset.push_to_hub()
+    finally:
+        log_say("Stop recording")
+        if robot.is_connected:
+            robot.disconnect()
+        if teleop.is_connected:
+            teleop.disconnect()
+        shutdown_visualization("rerun")
 
 
 if __name__ == "__main__":
