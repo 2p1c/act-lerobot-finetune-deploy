@@ -10,7 +10,7 @@ import subprocess
 from pathlib import Path
 
 from lerobot.cameras.opencv import OpenCVCameraConfig
-from lerobot.common.control_utils import init_keyboard_listener
+from lerobot.utils.keyboard_input import init_keyboard_listener
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.processor import make_default_processors
 from lerobot.robots.so_follower import SO101Follower, SO101FollowerConfig
