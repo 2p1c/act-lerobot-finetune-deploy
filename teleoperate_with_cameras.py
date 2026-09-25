@@ -39,7 +39,7 @@ def main():
     )
 
     # pass "foxglove" to stream to Foxglove instead
-    init_visualization("rerun", session_name="teleoperation")
+    init_visualization("rerun", session_name="teleoperation", ip="192.168.18.9", port=9876,)
 
     robot = SO101Follower(robot_config)
     teleop_device = SO101Leader(teleop_config)
