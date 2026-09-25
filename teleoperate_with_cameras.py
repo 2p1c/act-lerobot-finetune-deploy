@@ -4,6 +4,7 @@ Adapted from the API example in:
 https://huggingface.co/docs/lerobot/main/en/il_robots
 """
 
+import argparse
 import time
 
 from lerobot.cameras.opencv import OpenCVCameraConfig
@@ -24,14 +25,27 @@ TARGET_HZ = 30
 TIME_PER_FRAME = 1.0 / TARGET_HZ
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Teleoperate the SO-101 follower from the leader arm.")
+    parser.add_argument(
+        "--no-camera",
+        action="store_true",
+        help="Do not open the camera. Rerun still shows joint positions.",
+    )
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
+    cameras = {}
+    if not args.no_camera:
+        cameras = {
+            "wrist": OpenCVCameraConfig(index_or_path=0, width=640, height=480, fps=30),
+        }
     robot_config = SO101FollowerConfig(
         port=FOLLOWER_PORT,
         id=FOLLOWER_ID,
-        cameras={
-            "wrist": OpenCVCameraConfig(index_or_path=0, width=640, height=480, fps=30),
-            "top": OpenCVCameraConfig(index_or_path=1, width=640, height=480, fps=30),
-        },
+        cameras=cameras,
     )
     teleop_config = SO101LeaderConfig(
         port=LEADER_PORT,
