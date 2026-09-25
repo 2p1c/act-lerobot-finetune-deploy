@@ -15,9 +15,9 @@ from lerobot.utils.visualization_utils import (
     shutdown_visualization,
 )
 
-FOLLOWER_PORT = "/dev/ttyACM1"
+FOLLOWER_PORT = "/dev/ttyACM0"
 FOLLOWER_ID = "YutongZhu_awesome_follower_arm"
-LEADER_PORT = "/dev/ttyACM0"
+LEADER_PORT = "/dev/ttyACM1"
 LEADER_ID = "YutongZhu_awesome_leader_arm"
 
 TARGET_HZ = 30
