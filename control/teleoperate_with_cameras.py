@@ -16,9 +16,9 @@ from lerobot.utils.visualization_utils import (
     shutdown_visualization,
 )
 
-FOLLOWER_PORT = "/dev/ttyACM0"
+FOLLOWER_PORT = "/dev/ttyACM1"
 FOLLOWER_ID = "YutongZhu_awesome_follower_arm"
-LEADER_PORT = "/dev/ttyACM1"
+LEADER_PORT = "/dev/ttyACM0"
 LEADER_ID = "YutongZhu_awesome_leader_arm"
 
 TARGET_HZ = 30
@@ -76,9 +76,9 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        shutdown_visualization("rerun")
         teleop_device.disconnect()
         robot.disconnect()
+        shutdown_visualization("rerun")
 
 
 if __name__ == "__main__":

@@ -15,15 +15,16 @@ from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.processor import make_default_processors
 from lerobot.robots.so_follower import SO101Follower, SO101FollowerConfig
 from lerobot.scripts.lerobot_record import record_loop
+from lerobot.utils.cycle_timer import CycleTimer
 from lerobot.teleoperators.so_leader.config_so_leader import SO101LeaderConfig
 from lerobot.teleoperators.so_leader.so_leader import SO101Leader
 from lerobot.utils.feature_utils import hw_to_dataset_features
 from lerobot.utils.utils import log_say
 from lerobot.utils.visualization_utils import init_visualization, shutdown_visualization
 
-FOLLOWER_PORT = "/dev/ttyACM0"
+FOLLOWER_PORT = "/dev/ttyACM1"
 FOLLOWER_ID = "YutongZhu_awesome_follower_arm"
-LEADER_PORT = "/dev/ttyACM1"
+LEADER_PORT = "/dev/ttyACM0"
 LEADER_ID = "YutongZhu_awesome_leader_arm"
 
 NUM_EPISODES = 5
@@ -31,7 +32,8 @@ FPS = 30
 EPISODE_TIME_SEC = 60
 RESET_TIME_SEC = 10
 TASK_DESCRIPTION = "My task description"
-REPO_ID = "yutongzhu/record-test"
+HF_USER = "yutongzhu"
+DEFAULT_DATASET_NAME = "record-test"
 RERUN_IP = "192.168.18.9"
 RERUN_PORT = 9876
 MAC_HOST = "zyt@192.168.18.9"
@@ -40,6 +42,11 @@ MAC_DIR = "/Users/zyt/lerobot-datasets"
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Record an SO-101 dataset while watching it in Rerun.")
+    parser.add_argument(
+        "--dataset-name",
+        default=DEFAULT_DATASET_NAME,
+        help="Dataset name. Saved as yutongzhu/<name>. A value containing '/' is used as the full repo id.",
+    )
     parser.add_argument(
         "--no-camera",
         action="store_true",
@@ -53,6 +60,12 @@ def parse_args():
     )
     parser.add_argument("--rerun-ip", default=RERUN_IP, help="IP of the computer running the Rerun viewer.")
     parser.add_argument("--rerun-port", type=int, default=RERUN_PORT)
+    parser.add_argument(
+        "--reset-time",
+        type=float,
+        default=RESET_TIME_SEC,
+        help="Seconds to wait between episodes. Press n again during the reset to skip it.",
+    )
     parser.add_argument("--mac-host", default=MAC_HOST, help="SSH target used when --save-to mac.")
     parser.add_argument("--mac-dir", default=MAC_DIR, help="Directory on the computer used when --save-to mac.")
     return parser.parse_args()
@@ -66,8 +79,18 @@ def copy_dataset_to_mac(dataset_root: Path, mac_host: str, mac_dir: str, repo_id
     print(f"Dataset copied to {mac_host}:{remote_dir}")
 
 
+def repo_id_from_name(dataset_name: str) -> str:
+    name = dataset_name.strip().strip("/")
+    if not name:
+        raise SystemExit("数据集名字不能为空。")
+    if "/" in name:
+        return name
+    return f"{HF_USER}/{name}"
+
+
 def main():
     args = parse_args()
+    repo_id = repo_id_from_name(args.dataset_name)
     cameras = {}
     if not args.no_camera:
         cameras = {
@@ -92,12 +115,13 @@ def main():
     dataset_features = {**action_features, **obs_features}
 
     dataset = LeRobotDataset.create(
-        repo_id=REPO_ID,
+        repo_id=repo_id,
         fps=FPS,
         features=dataset_features,
         robot_type=robot.name,
         use_videos=True,
         image_writer_threads=4,
+        streaming_encoding=True,
     )
     dataset_root = Path(dataset.root)
     print(f"Recording on the Jetson at {dataset_root}")
@@ -114,6 +138,8 @@ def main():
     teleop.connect()
 
     teleop_action_processor, robot_action_processor, robot_observation_processor = make_default_processors()
+    timer = CycleTimer(FPS)
+    completed = False
 
     try:
         episode_idx = 0
@@ -132,6 +158,8 @@ def main():
                 control_time_s=EPISODE_TIME_SEC,
                 single_task=TASK_DESCRIPTION,
                 display_data=True,
+                display_compressed_images=True,
+                timer=timer,
             )
 
             if not events["stop_recording"] and (episode_idx < NUM_EPISODES - 1 or events["rerecord_episode"]):
@@ -144,9 +172,10 @@ def main():
                     robot_action_processor=robot_action_processor,
                     robot_observation_processor=robot_observation_processor,
                     teleop=teleop,
-                    control_time_s=RESET_TIME_SEC,
+                    control_time_s=args.reset_time,
                     single_task=TASK_DESCRIPTION,
                     display_data=True,
+                    display_compressed_images=True,
                 )
 
             if events["rerecord_episode"]:
@@ -154,17 +183,24 @@ def main():
                 events["rerecord_episode"] = False
                 events["exit_early"] = False
                 dataset.clear_episode_buffer()
+                timer.log_episode_summary("discarded episode")
+                timer.restart()
                 continue
 
             dataset.save_episode()
+            timer.log_episode_summary(f"episode {episode_idx + 1}")
+            timer.restart()
             episode_idx += 1
 
-        log_say("Finalizing dataset...")
-        dataset.finalize()
-        if args.save_to == "mac":
-            copy_dataset_to_mac(dataset_root, args.mac_host, args.mac_dir, REPO_ID)
-        dataset.push_to_hub()
+        completed = True
     finally:
+        timer.log_run_summary()
+        if completed:
+            log_say("Finalizing dataset...")
+            dataset.finalize()
+            if args.save_to == "mac":
+                copy_dataset_to_mac(dataset_root, args.mac_host, args.mac_dir, repo_id)
+            dataset.push_to_hub()
         log_say("Stop recording")
         if robot.is_connected:
             robot.disconnect()
