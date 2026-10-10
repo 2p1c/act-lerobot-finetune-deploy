@@ -4,8 +4,8 @@
 #
 #   bash control/rollout_so101_adjust_bottle.sh
 #
-# 这次先测每步原始推理延迟：n_action_steps=1，不打开 temporal ensembling。
-# 终端会打印 [act raw] step=N xx.x ms，结束时有 mean/p50/p95。
+# 这次先测每拍各阶段耗时：n_action_steps=1，不打开 temporal ensembling。
+# 终端每拍打印 capture/pre/infer/send/loop，结束时有 p50/p95/p99 和超时率。
 # 跑之前把瓶子和手臂摆回录数据时的起始状态，相机不要挪。
 # 脚本一连上 follower 就会打开力矩，手臂会自己动。手边留着急停。
 # 到时间或按 Ctrl+C 之后，手臂先回到启动时的姿势，再断开并关闭力矩。
