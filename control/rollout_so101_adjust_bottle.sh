@@ -3,9 +3,11 @@
 # 不用 leader，也不写数据集。
 #
 #   bash control/rollout_so101_adjust_bottle.sh
+#   bash control/rollout_so101_adjust_bottle.sh --fp16
 #
 # 这次先测每拍各阶段耗时：n_action_steps=1，不打开 temporal ensembling。
 # 终端每拍打印 capture/pre/infer/send/loop，结束时有 p50/p95/p99 和超时率。
+# --fp16 会用 torch.autocast("cuda", dtype=torch.float16) 包住 select_action。
 # 跑之前把瓶子和手臂摆回录数据时的起始状态，相机不要挪。
 # 脚本一连上 follower 就会打开力矩，手臂会自己动。手边留着急停。
 # 到时间或按 Ctrl+C 之后，手臂先回到启动时的姿势，再断开并关闭力矩。
@@ -78,4 +80,4 @@ args=(
 )
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec python "${SCRIPT_DIR}/log_act_inference_latency.py" "${args[@]}"
+exec python "${SCRIPT_DIR}/log_act_inference_latency.py" "${args[@]}" "$@"

@@ -15,8 +15,11 @@ its args.
 
 from __future__ import annotations
 
+import argparse
 import atexit
+import sys
 import time
+from contextlib import nullcontext
 
 import numpy as np
 import torch
@@ -30,6 +33,7 @@ _KEYS = ("capture", "pre", "infer", "send", "loop")
 _rec = {k: [] for k in _KEYS}
 _t = {}
 _fps = 30.0
+_fp16 = False
 
 _orig_run = BaseStrategy.run
 _orig_select_action = ACTPolicy.select_action
@@ -70,9 +74,16 @@ def _record_tick() -> None:
     )
 
 
+def _infer_context():
+    if _fp16:
+        return torch.autocast("cuda", dtype=torch.float16)
+    return nullcontext()
+
+
 def _timed_select_action(self, batch):
     _t["t2"] = time.perf_counter()
-    action = _orig_select_action(self, batch)
+    with _infer_context():
+        action = _orig_select_action(self, batch)
     _cuda_sync()
     _t["t3"] = time.perf_counter()
     return action
@@ -132,5 +143,21 @@ BaseStrategy.run = _timed_run
 atexit.register(_print_summary)
 
 
+def _parse_wrapper_args() -> None:
+    global _fp16
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument(
+        "--fp16",
+        action="store_true",
+        help="Run ACT select_action under torch.autocast(cuda, float16).",
+    )
+    args, remaining = parser.parse_known_args()
+    _fp16 = args.fp16
+    sys.argv = [sys.argv[0], *remaining]
+    if _fp16:
+        print("[tick] FP16 autocast enabled for select_action", flush=True)
+
+
 if __name__ == "__main__":
+    _parse_wrapper_args()
     main()
