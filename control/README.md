@@ -17,16 +17,23 @@
 ls -l /dev/ttyACM*
 ```
 
-## 1. 在电脑上打开 Rerun
+## 1. 用浏览器看画面
 
-Viewer 版本要和开发板一致（0.33.1）：
+两路相机推到电脑上的原生 Rerun 窗口容易卡住。开发板自己开网页 Viewer，电脑用浏览器打开终端里打印的地址：
+
+```bash
+python record.py --dataset-name so101-pick-cube --web-view
+python teleoperate_with_cameras.py --web-view
+```
+
+地址类似 `http://192.168.18.x:9090/?url=...`。电脑上不用再开 `rerun` 窗口。推荐 Chrome / Edge。
+
+走 `--remote-view` 才需要电脑上先开原生 Viewer，版本要和开发板一致（0.33.1）：
 
 ```bash
 pipx install --backend pip rerun-sdk==0.33.1
 rerun --bind 0.0.0.0 --port 9876
 ```
-
-窗口保持开着。开发板把画面发到 `192.168.18.9:9876`，不在开发板上开窗口。
 
 ## 2. 在开发板上进入环境
 
@@ -38,15 +45,13 @@ cd ~/Projects/pi0-lerobot-finetune-deploy/control
 
 录制过程中这个 SSH 窗口要保持在前台，按键才会生效。
 
-开发板的代理会把发往电脑的连接转走，Rerun 就收不到画面。录制前先让局域网地址直连：
+`--web-view` 不需要关代理，电脑上也先不用开 Rerun。只有 `--remote-view` 才必须先让局域网直连，否则开发板代理会把发往电脑的连接转到 `127.0.0.1:7897`：
 
 ```bash
 unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY
 ```
 
-只取消 `all_proxy` 不够。`http_proxy` 仍会把发往 `192.168.18.9` 的连接转到开发板本机的 `127.0.0.1:7897`。
-
-电脑上的 Rerun 要先开着。连上之后，相机画面只显示最新一帧，不能往回拖；关节曲线可以回放。
+连上之后，相机画面只显示最新一帧，不能往回拖；关节曲线可以回放。
 
 ## 3. 需要时先校准
 
@@ -76,7 +81,7 @@ Follower 校准结束后会打开力矩，手臂可能自己动一下。Leader �
 同一位置的每一集，都从同一种初始状态开始：手臂回到起始姿势，物体放回同一位置，相机固定不动。
 
 ```bash
-python record.py --dataset-name so101-pick-cube
+python record.py --dataset-name so101-pick-cube --web-view
 ```
 
 常用参数：
@@ -84,6 +89,9 @@ python record.py --dataset-name so101-pick-cube
 ```bash
 # 不录相机，只录关节
 python record.py --dataset-name so101-pick-cube --no-camera
+
+# 电脑用浏览器看画面
+python record.py --dataset-name so101-pick-cube --web-view
 
 # 集与集之间的重置时间，默认 10 秒
 python record.py --dataset-name so101-pick-cube --reset-time 2
@@ -104,7 +112,7 @@ rm -rf ~/.cache/huggingface/lerobot/yutongzhu/so101-pick-cube
 
 ## 5. 录制时的按键
 
-在 SSH 终端里按，不要按到电脑上的 Rerun 窗口。
+在 SSH 终端里按，不要按到电脑上的浏览器或 Rerun 窗口。
 
 | 按键 | 作用 |
 |------|------|

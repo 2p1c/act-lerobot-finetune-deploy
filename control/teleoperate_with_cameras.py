@@ -5,17 +5,14 @@ https://huggingface.co/docs/lerobot/main/en/il_robots
 """
 
 import argparse
-import os
 import time
 
 from lerobot.cameras.opencv import OpenCVCameraConfig
 from lerobot.robots.so_follower import SO101Follower, SO101FollowerConfig
 from lerobot.teleoperators.so_leader import SO101Leader, SO101LeaderConfig
-from lerobot.utils.visualization_utils import (
-    init_visualization,
-    log_visualization_data,
-    shutdown_visualization,
-)
+from lerobot.utils.visualization_utils import log_visualization_data, shutdown_visualization
+
+from rerun_view import compress_images, start_rerun
 
 FOLLOWER_PORT = "/dev/ttyACM1"
 FOLLOWER_ID = "YutongZhu_awesome_follower_arm"
@@ -37,10 +34,22 @@ def parse_args():
     )
     parser.add_argument("--rerun-ip", default=RERUN_IP, help="IP of the computer running the Rerun viewer.")
     parser.add_argument("--rerun-port", type=int, default=RERUN_PORT)
-    parser.add_argument(
+    view = parser.add_mutually_exclusive_group()
+    view.add_argument(
         "--remote-view",
         action="store_true",
         help="Send the Rerun view to --rerun-ip instead of opening a window on this machine.",
+    )
+    view.add_argument(
+        "--web-view",
+        action="store_true",
+        help="Serve a Rerun web viewer on this machine. Open the printed URL on the computer.",
+    )
+    parser.add_argument(
+        "--web-port",
+        type=int,
+        default=9090,
+        help="HTTP port for --web-view. Default is 9090.",
     )
     return parser.parse_args()
 
@@ -63,18 +72,13 @@ def main():
         id=LEADER_ID,
     )
 
-    rerun_ip = args.rerun_ip if args.remote_view else None
-    rerun_port = args.rerun_port if args.remote_view else None
-    if args.remote_view:
-        print(f"Sending Rerun view to {rerun_ip}:{rerun_port}")
-    else:
-        os.environ.setdefault("DISPLAY", ":1")
-        print(f"Opening Rerun on this machine (DISPLAY={os.environ['DISPLAY']})")
-    init_visualization(
-        "rerun",
-        session_name="teleoperation",
-        ip=rerun_ip,
-        port=rerun_port,
+    start_rerun(
+        "teleoperation",
+        remote_view=args.remote_view,
+        web_view=args.web_view,
+        rerun_ip=args.rerun_ip,
+        rerun_port=args.rerun_port,
+        web_port=args.web_port,
     )
 
     robot = SO101Follower(robot_config)
@@ -93,7 +97,7 @@ def main():
                 "rerun",
                 observation=observation,
                 action=action,
-                compress_images=args.remote_view,
+                compress_images=compress_images(args.remote_view, args.web_view),
             )
 
             elapsed_time = time.perf_counter() - start_time

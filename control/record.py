@@ -1,12 +1,11 @@
 """Record an SO-101 dataset.
 
-The control loop runs on the Jetson. Rerun on the local computer only displays
-the stream. Frames are always written on the Jetson first; --save-to mac
+The control loop runs on the Jetson. --web-view serves a browser viewer from
+the board. Frames are always written on the Jetson first; --save-to mac
 copies the finished dataset to the computer afterwards.
 """
 
 import argparse
-import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -22,7 +21,9 @@ from lerobot.teleoperators.so_leader.config_so_leader import SO101LeaderConfig
 from lerobot.teleoperators.so_leader.so_leader import SO101Leader
 from lerobot.utils.feature_utils import hw_to_dataset_features
 from lerobot.utils.utils import log_say
-from lerobot.utils.visualization_utils import init_visualization, shutdown_visualization
+from lerobot.utils.visualization_utils import shutdown_visualization
+
+from rerun_view import compress_images, start_rerun
 
 FOLLOWER_PORT = "/dev/ttyACM1"
 FOLLOWER_ID = "YutongZhu_awesome_follower_arm"
@@ -66,10 +67,22 @@ def parse_args():
     )
     parser.add_argument("--rerun-ip", default=RERUN_IP, help="IP of the computer running the Rerun viewer.")
     parser.add_argument("--rerun-port", type=int, default=RERUN_PORT)
-    parser.add_argument(
+    view = parser.add_mutually_exclusive_group()
+    view.add_argument(
         "--remote-view",
         action="store_true",
         help="Send the Rerun view to --rerun-ip instead of opening a window on this machine.",
+    )
+    view.add_argument(
+        "--web-view",
+        action="store_true",
+        help="Serve a Rerun web viewer on this machine. Open the printed URL on the computer.",
+    )
+    parser.add_argument(
+        "--web-port",
+        type=int,
+        default=9090,
+        help="HTTP port for --web-view. Default is 9090.",
     )
     parser.add_argument(
         "--num-episodes",
@@ -155,19 +168,15 @@ def main():
     print(f"Recording on the Jetson at {dataset_root}")
 
     _, events = init_keyboard_listener()
-    rerun_ip = args.rerun_ip if args.remote_view else None
-    rerun_port = args.rerun_port if args.remote_view else None
-    if args.remote_view:
-        print(f"Sending Rerun view to {rerun_ip}:{rerun_port}")
-    else:
-        os.environ.setdefault("DISPLAY", ":1")
-        print(f"Opening Rerun on this machine (DISPLAY={os.environ['DISPLAY']})")
-    init_visualization(
-        "rerun",
-        session_name="recording",
-        ip=rerun_ip,
-        port=rerun_port,
+    start_rerun(
+        "recording",
+        remote_view=args.remote_view,
+        web_view=args.web_view,
+        rerun_ip=args.rerun_ip,
+        rerun_port=args.rerun_port,
+        web_port=args.web_port,
     )
+    send_compressed = compress_images(args.remote_view, args.web_view)
 
     robot.connect()
     teleop.connect()
@@ -193,7 +202,7 @@ def main():
                 control_time_s=EPISODE_TIME_SEC,
                 single_task=task_description,
                 display_data=True,
-                display_compressed_images=args.remote_view,
+                display_compressed_images=send_compressed,
                 timer=timer,
             )
 
@@ -210,7 +219,7 @@ def main():
                     control_time_s=args.reset_time,
                     single_task=task_description,
                     display_data=True,
-                    display_compressed_images=args.remote_view,
+                    display_compressed_images=send_compressed,
                 )
 
             if events["rerecord_episode"]:
