@@ -153,3 +153,15 @@ python replay.py --dataset-name so101-pick-cube --episode 0
 ```
 
 `teleoperate_with_cameras.py` 只做实时遥操作，不写数据集。
+
+## 9. 推理
+
+任务名对应训练输出目录 `~/outputs/act/<任务名>/checkpoints/last/pretrained_model`。手臂和相机配置写在 `rollout.sh` 里，换任务只换第一个参数：
+
+```bash
+bash rollout.sh so101-adjust-bottle
+bash rollout.sh so101-adjust-bottle --fp16
+bash rollout.sh so101-pick-cube --duration=30
+```
+
+脚本一连上 follower 就会打开力矩。跑之前把物体和手臂摆回录数据时的起始状态。旧的单相机权重和现在的双相机对不上，不能拿来跑。
