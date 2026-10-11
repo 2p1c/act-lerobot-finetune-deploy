@@ -4,12 +4,17 @@ from __future__ import annotations
 
 import os
 import socket
+import time
 from urllib.parse import quote
 
+from lerobot.utils import rerun_visualization, visualization_utils
 from lerobot.utils.rerun_visualization import log_rerun_data
 from lerobot.utils.visualization_utils import init_visualization
 
 DEFAULT_WEB_PORT = 9090
+# Two 640x480 streams at 30 Hz fill the gRPC queue; the web viewer then blocks
+# the control loop. Live view only needs a few frames per second.
+WEB_VIZ_HZ = 5.0
 
 
 def lan_ip(probe_host: str) -> str:
@@ -39,6 +44,7 @@ def start_rerun(
     if remote_view and web_view:
         raise SystemExit("不能同时使用 --remote-view 和 --web-view。")
     if web_view:
+        _install_viz_throttle(WEB_VIZ_HZ)
         _start_web(session_name, grpc_port=rerun_port, web_port=web_port, probe_host=rerun_ip)
         return
 
@@ -64,10 +70,29 @@ def _start_web(session_name: str, grpc_port: int, web_port: int, probe_host: str
     # origins; Rerun otherwise only allows localhost and rerun.io.
     rr.serve_grpc(
         grpc_port=grpc_port,
+        server_memory_limit="64MiB",
+        newest_first=True,
         cors_allow_origin=[origin, f"http://{host}:*", "http://127.0.0.1:*", "*"],
     )
     connect_uri = f"rerun+http://{host}:{grpc_port}/proxy"
     rr.serve_web_viewer(open_browser=False, web_port=web_port, connect_to=connect_uri)
     page = f"http://{host}:{web_port}/?url={quote(connect_uri, safe='')}"
     print(f"Rerun web viewer: {page}")
+    print(f"Live view is {WEB_VIZ_HZ:.0f} Hz so the arm loop is not blocked by the browser.")
     print("Open that URL on the computer. Do not start a native Rerun window.")
+
+
+def _install_viz_throttle(hz: float) -> None:
+    period = 1.0 / hz
+    last = {"t": 0.0}
+    orig = rerun_visualization.log_rerun_data
+
+    def throttled(*args, **kwargs):
+        now = time.perf_counter()
+        if now - last["t"] < period:
+            return
+        last["t"] = now
+        return orig(*args, **kwargs)
+
+    rerun_visualization.log_rerun_data = throttled
+    visualization_utils.log_rerun_data = throttled
