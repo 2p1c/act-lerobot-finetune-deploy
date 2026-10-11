@@ -137,8 +137,8 @@ def main():
         cameras = {
             "wrist": OpenCVCameraConfig(
                 index_or_path=0,
-                width=640,
-                height=480,
+                width=480,
+                height=640,
                 fps=30,
                 rotation=Cv2Rotation.ROTATE_90,
             ),

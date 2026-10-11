@@ -68,8 +68,8 @@ def main():
         cameras = {
             "wrist": OpenCVCameraConfig(
                 index_or_path=0,
-                width=640,
-                height=480,
+                width=480,
+                height=640,
                 fps=30,
                 rotation=Cv2Rotation.ROTATE_90,
             ),
@@ -101,10 +101,12 @@ def main():
 
     robot = SO101Follower(robot_config)
     teleop_device = SO101Leader(teleop_config)
-    t_end = None if duration <= 0 else time.perf_counter() + duration
+    recorded = False
     try:
         robot.connect()
         teleop_device.connect()
+        t_end = None if duration <= 0 else time.perf_counter() + duration
+        recorded = True
         while t_end is None or time.perf_counter() < t_end:
             start_time = time.perf_counter()
 
@@ -130,7 +132,7 @@ def main():
         if robot.is_connected:
             robot.disconnect()
         shutdown_visualization("rerun")
-        if rrd_path is not None:
+        if rrd_path is not None and recorded:
             replay_rrd(
                 rrd_path,
                 web_port=args.web_port,
