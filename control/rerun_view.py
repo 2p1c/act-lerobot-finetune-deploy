@@ -7,6 +7,7 @@ import socket
 import subprocess
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
 
 from lerobot.utils.rerun_visualization import log_rerun_data
 from lerobot.utils.visualization_utils import init_visualization
@@ -59,16 +60,23 @@ def replay_rrd(
     path: Path,
     *,
     web_port: int = DEFAULT_WEB_PORT,
+    grpc_port: int = 9876,
     probe_host: str = "192.168.18.9",
 ) -> None:
     if not path.is_file():
         print(f"No Rerun clip to review: {path}")
         return
     host = lan_ip(probe_host)
-    page = f"http://{host}:{web_port}"
+    connect_uri = f"rerun+http://{host}:{grpc_port}/proxy"
+    page = f"http://{host}:{web_port}/?url={quote(connect_uri, safe='')}"
     print(f"Review clip: {page}")
     print(f"File: {path}")
     print("Ctrl+C to stop the viewer.")
+    env = os.environ.copy()
+    for key in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "all_proxy", "ALL_PROXY"):
+        env.pop(key, None)
+    env["NO_PROXY"] = "*"
+    env["no_proxy"] = "*"
     subprocess.run(
         [
             "rerun",
@@ -76,10 +84,13 @@ def replay_rrd(
             "--web-viewer",
             "--bind",
             "0.0.0.0",
+            "--port",
+            str(grpc_port),
             "--web-viewer-port",
             str(web_port),
         ],
         check=False,
+        env=env,
     )
 
 

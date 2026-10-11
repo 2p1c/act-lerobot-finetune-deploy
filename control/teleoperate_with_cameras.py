@@ -124,7 +124,12 @@ def main():
             robot.disconnect()
         shutdown_visualization("rerun")
         if rrd_path is not None:
-            replay_rrd(rrd_path, web_port=args.web_port, probe_host=args.rerun_ip)
+            replay_rrd(
+                rrd_path,
+                web_port=args.web_port,
+                grpc_port=args.rerun_port,
+                probe_host=args.rerun_ip,
+            )
 
 
 if __name__ == "__main__":
