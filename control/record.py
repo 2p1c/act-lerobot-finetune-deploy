@@ -6,7 +6,9 @@ copies the finished dataset to the computer afterwards.
 """
 
 import argparse
+import os
 import subprocess
+from datetime import datetime
 from pathlib import Path
 
 from lerobot.cameras.opencv import OpenCVCameraConfig
@@ -31,7 +33,6 @@ NUM_EPISODES = 5
 FPS = 30
 EPISODE_TIME_SEC = 60
 RESET_TIME_SEC = 10
-TASK_DESCRIPTION = "My task description"
 HF_USER = "yutongzhu"
 DEFAULT_DATASET_NAME = "record-test"
 RERUN_IP = "192.168.18.9"
@@ -48,6 +49,11 @@ def parse_args():
         help="Dataset name. Saved as yutongzhu/<name>. A value containing '/' is used as the full repo id.",
     )
     parser.add_argument(
+        "--auto-name",
+        action="store_true",
+        help="Append the current time to the dataset name, for example so101-pick-cube_20260928_193000.",
+    )
+    parser.add_argument(
         "--no-camera",
         action="store_true",
         help="Do not open the camera. The dataset stores joint data only.",
@@ -60,6 +66,17 @@ def parse_args():
     )
     parser.add_argument("--rerun-ip", default=RERUN_IP, help="IP of the computer running the Rerun viewer.")
     parser.add_argument("--rerun-port", type=int, default=RERUN_PORT)
+    parser.add_argument(
+        "--remote-view",
+        action="store_true",
+        help="Send the Rerun view to --rerun-ip instead of opening a window on this machine.",
+    )
+    parser.add_argument(
+        "--num-episodes",
+        type=int,
+        default=NUM_EPISODES,
+        help="How many episodes to record. Default is 5.",
+    )
     parser.add_argument(
         "--reset-time",
         type=float,
@@ -79,10 +96,13 @@ def copy_dataset_to_mac(dataset_root: Path, mac_host: str, mac_dir: str, repo_id
     print(f"Dataset copied to {mac_host}:{remote_dir}")
 
 
-def repo_id_from_name(dataset_name: str) -> str:
+def repo_id_from_name(dataset_name: str, auto_name: bool) -> str:
     name = dataset_name.strip().strip("/")
     if not name:
         raise SystemExit("数据集名字不能为空。")
+    if auto_name:
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        name = f"{name}_{stamp}"
     if "/" in name:
         return name
     return f"{HF_USER}/{name}"
@@ -90,11 +110,19 @@ def repo_id_from_name(dataset_name: str) -> str:
 
 def main():
     args = parse_args()
-    repo_id = repo_id_from_name(args.dataset_name)
+    if args.num_episodes < 1:
+        raise SystemExit("录制集数至少为 1。")
+    repo_id = repo_id_from_name(args.dataset_name, args.auto_name)
+    print(f"Dataset id: {repo_id}")
+    task_description = ""
+    while not task_description:
+        task_description = input("任务描述: ").strip()
+    print(f"Task: {task_description}")
     cameras = {}
     if not args.no_camera:
         cameras = {
             "wrist": OpenCVCameraConfig(index_or_path=0, width=640, height=480, fps=30),
+            "front": OpenCVCameraConfig(index_or_path="/dev/video2", width=640, height=480, fps=30),
         }
 
     robot_config = SO101FollowerConfig(
@@ -127,11 +155,18 @@ def main():
     print(f"Recording on the Jetson at {dataset_root}")
 
     _, events = init_keyboard_listener()
+    rerun_ip = args.rerun_ip if args.remote_view else None
+    rerun_port = args.rerun_port if args.remote_view else None
+    if args.remote_view:
+        print(f"Sending Rerun view to {rerun_ip}:{rerun_port}")
+    else:
+        os.environ.setdefault("DISPLAY", ":1")
+        print(f"Opening Rerun on this machine (DISPLAY={os.environ['DISPLAY']})")
     init_visualization(
         "rerun",
         session_name="recording",
-        ip=args.rerun_ip,
-        port=args.rerun_port,
+        ip=rerun_ip,
+        port=rerun_port,
     )
 
     robot.connect()
@@ -143,8 +178,8 @@ def main():
 
     try:
         episode_idx = 0
-        while episode_idx < NUM_EPISODES and not events["stop_recording"]:
-            log_say(f"Recording episode {episode_idx + 1} of {NUM_EPISODES}")
+        while episode_idx < args.num_episodes and not events["stop_recording"]:
+            log_say(f"Recording episode {episode_idx + 1} of {args.num_episodes}")
 
             record_loop(
                 robot=robot,
@@ -156,13 +191,13 @@ def main():
                 teleop=teleop,
                 dataset=dataset,
                 control_time_s=EPISODE_TIME_SEC,
-                single_task=TASK_DESCRIPTION,
+                single_task=task_description,
                 display_data=True,
-                display_compressed_images=True,
+                display_compressed_images=args.remote_view,
                 timer=timer,
             )
 
-            if not events["stop_recording"] and (episode_idx < NUM_EPISODES - 1 or events["rerecord_episode"]):
+            if not events["stop_recording"] and (episode_idx < args.num_episodes - 1 or events["rerecord_episode"]):
                 log_say("Reset the environment")
                 record_loop(
                     robot=robot,
@@ -173,9 +208,9 @@ def main():
                     robot_observation_processor=robot_observation_processor,
                     teleop=teleop,
                     control_time_s=args.reset_time,
-                    single_task=TASK_DESCRIPTION,
+                    single_task=task_description,
                     display_data=True,
-                    display_compressed_images=True,
+                    display_compressed_images=args.remote_view,
                 )
 
             if events["rerecord_episode"]:

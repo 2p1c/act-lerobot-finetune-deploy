@@ -5,6 +5,7 @@ https://huggingface.co/docs/lerobot/main/en/il_robots
 """
 
 import argparse
+import os
 import time
 
 from lerobot.cameras.opencv import OpenCVCameraConfig
@@ -23,6 +24,8 @@ LEADER_ID = "YutongZhu_awesome_leader_arm"
 
 TARGET_HZ = 30
 TIME_PER_FRAME = 1.0 / TARGET_HZ
+RERUN_IP = "192.168.18.9"
+RERUN_PORT = 9876
 
 
 def parse_args():
@@ -31,6 +34,13 @@ def parse_args():
         "--no-camera",
         action="store_true",
         help="Do not open the camera. Rerun still shows joint positions.",
+    )
+    parser.add_argument("--rerun-ip", default=RERUN_IP, help="IP of the computer running the Rerun viewer.")
+    parser.add_argument("--rerun-port", type=int, default=RERUN_PORT)
+    parser.add_argument(
+        "--remote-view",
+        action="store_true",
+        help="Send the Rerun view to --rerun-ip instead of opening a window on this machine.",
     )
     return parser.parse_args()
 
@@ -41,6 +51,7 @@ def main():
     if not args.no_camera:
         cameras = {
             "wrist": OpenCVCameraConfig(index_or_path=0, width=640, height=480, fps=30),
+            "front": OpenCVCameraConfig(index_or_path="/dev/video2", width=640, height=480, fps=30),
         }
     robot_config = SO101FollowerConfig(
         port=FOLLOWER_PORT,
@@ -52,8 +63,19 @@ def main():
         id=LEADER_ID,
     )
 
-    # pass "foxglove" to stream to Foxglove instead
-    init_visualization("rerun", session_name="teleoperation", ip="192.168.18.9", port=9876,)
+    rerun_ip = args.rerun_ip if args.remote_view else None
+    rerun_port = args.rerun_port if args.remote_view else None
+    if args.remote_view:
+        print(f"Sending Rerun view to {rerun_ip}:{rerun_port}")
+    else:
+        os.environ.setdefault("DISPLAY", ":1")
+        print(f"Opening Rerun on this machine (DISPLAY={os.environ['DISPLAY']})")
+    init_visualization(
+        "rerun",
+        session_name="teleoperation",
+        ip=rerun_ip,
+        port=rerun_port,
+    )
 
     robot = SO101Follower(robot_config)
     teleop_device = SO101Leader(teleop_config)
@@ -67,7 +89,12 @@ def main():
             observation = robot.get_observation()
             action = teleop_device.get_action()
             robot.send_action(action)
-            log_visualization_data("rerun", observation=observation, action=action)
+            log_visualization_data(
+                "rerun",
+                observation=observation,
+                action=action,
+                compress_images=args.remote_view,
+            )
 
             elapsed_time = time.perf_counter() - start_time
             sleep_time = TIME_PER_FRAME - elapsed_time

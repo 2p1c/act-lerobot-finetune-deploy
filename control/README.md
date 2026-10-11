@@ -8,7 +8,8 @@
 |------|------|-----|
 | Follower（被带动的臂） | `/dev/ttyACM1` | `YutongZhu_awesome_follower_arm` |
 | Leader（用手掰的臂） | `/dev/ttyACM0` | `YutongZhu_awesome_leader_arm` |
-| 相机 | 索引 0，640×480 | 数据集里的名字是 `wrist` |
+| 腕部相机 | 索引 0，640×480 | 数据集里的名字是 `wrist` |
+| 场景相机 | `/dev/video2`，640×480 | 数据集里的名字是 `front` |
 
 先确认 USB 没有对调：
 
@@ -36,6 +37,16 @@ cd ~/Projects/pi0-lerobot-finetune-deploy/control
 ```
 
 录制过程中这个 SSH 窗口要保持在前台，按键才会生效。
+
+开发板的代理会把发往电脑的连接转走，Rerun 就收不到画面。录制前先让局域网地址直连：
+
+```bash
+unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY
+```
+
+只取消 `all_proxy` 不够。`http_proxy` 仍会把发往 `192.168.18.9` 的连接转到开发板本机的 `127.0.0.1:7897`。
+
+电脑上的 Rerun 要先开着。连上之后，相机画面只显示最新一帧，不能往回拖；关节曲线可以回放。
 
 ## 3. 需要时先校准
 
@@ -103,12 +114,14 @@ rm -rf ~/.cache/huggingface/lerobot/yutongzhu/so101-pick-cube
 
 一次 `n` 只结束当前集，然后进入重置。看到 `Reset the environment` 后把现场摆回起始状态，再按一次 `n` 才开始下一集。
 
-终端里出现 `Exiting loop...` 表示按键已经收到。下一集开始前还要等当前帧发完，以及这一集的视频收尾。
+启动后会先刷 TorchCodec 警告和 `Svt[info]` 编码器日志，这时键盘监听还没装上。等这些日志停了、录制已经开始再按 `n`。按对了会打印 `Exiting loop...`，字母本身不会留在屏幕上。如果终端里出现你刚按的 `n`，这一下没有进到录制控制。
+
+下一集开始前还要等当前帧发完，以及这一集的视频收尾。
 
 ## 6. 每一集怎么录
 
 1. 摆好起始姿势和物体。
-2. 用手掰 leader，让 follower 做完任务。动作尽量一致，物体要一直在相机画面里。
+2. 用手掰 leader，让 follower 做完任务。动作尽量一致，物体要一直在 `wrist` 和 `front` 画面里。
 3. 做完按 `n`。
 4. 在重置时间里把物体和手臂放回这一组的起始位置，再按 `n`。
 5. 同一位置先录大约 10 集，再换下一个位置。一个抓放任务建议至少 50 集。
