@@ -1,8 +1,8 @@
 """Record an SO-101 dataset.
 
-The control loop runs on the Jetson. --web-view serves a browser viewer from
-the board. Frames are always written on the Jetson first; --save-to mac
-copies the finished dataset to the computer afterwards.
+The control loop runs on the Jetson. --web-view writes an .rrd on the board
+and opens a browser replay when the run ends. Frames are always written on
+the Jetson first; --save-to mac copies the finished dataset afterwards.
 """
 
 import argparse
@@ -23,7 +23,7 @@ from lerobot.utils.feature_utils import hw_to_dataset_features
 from lerobot.utils.utils import log_say
 from lerobot.utils.visualization_utils import shutdown_visualization
 
-from rerun_view import compress_images, start_rerun
+from rerun_view import compress_images, replay_rrd, start_rerun
 
 FOLLOWER_PORT = "/dev/ttyACM1"
 FOLLOWER_ID = "YutongZhu_awesome_follower_arm"
@@ -76,7 +76,7 @@ def parse_args():
     view.add_argument(
         "--web-view",
         action="store_true",
-        help="Serve a Rerun web viewer on this machine. Open the printed URL on the computer.",
+        help="Record a clip to an .rrd, then open it in a Rerun web viewer when recording ends.",
     )
     parser.add_argument(
         "--web-port",
@@ -168,7 +168,7 @@ def main():
     print(f"Recording on the Jetson at {dataset_root}")
 
     _, events = init_keyboard_listener()
-    start_rerun(
+    rrd_path = start_rerun(
         "recording",
         remote_view=args.remote_view,
         web_view=args.web_view,
@@ -250,6 +250,8 @@ def main():
         if teleop.is_connected:
             teleop.disconnect()
         shutdown_visualization("rerun")
+        if rrd_path is not None:
+            replay_rrd(rrd_path, web_port=args.web_port, probe_host=args.rerun_ip)
 
 
 if __name__ == "__main__":

@@ -17,16 +17,17 @@
 ls -l /dev/ttyACM*
 ```
 
-## 1. 用浏览器看画面
+## 1. 用浏览器回看
 
-两路相机推到电脑上的原生 Rerun 窗口容易卡住。开发板自己开网页 Viewer，电脑用浏览器打开终端里打印的地址：
+直播两路相机会堵住控制回路。`--web-view` 先把这一段记到开发板的 `.rrd`，结束后再开网页 Viewer，关节和画面都是 30 Hz，可以拖时间轴：
 
 ```bash
-python record.py --dataset-name so101-pick-cube --web-view
 python teleoperate_with_cameras.py --web-view
+python teleoperate_with_cameras.py --web-view --duration 20
+python record.py --dataset-name so101-pick-cube --web-view
 ```
 
-地址类似 `http://192.168.18.x:9090/?url=...`。电脑上不用再开 `rerun` 窗口。推荐 Chrome / Edge。
+默认录 60 秒（遥操作），到时间或 Ctrl+C 后终端会打印地址，例如 `http://192.168.18.x:9090`。电脑上不用先开 `rerun` 窗口。推荐 Chrome / Edge。文件在 `~/lerobot-rerun/`。
 
 走 `--remote-view` 才需要电脑上先开原生 Viewer，版本要和开发板一致（0.33.1）：
 

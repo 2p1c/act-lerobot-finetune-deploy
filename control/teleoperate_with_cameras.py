@@ -12,7 +12,7 @@ from lerobot.robots.so_follower import SO101Follower, SO101FollowerConfig
 from lerobot.teleoperators.so_leader import SO101Leader, SO101LeaderConfig
 from lerobot.utils.visualization_utils import log_visualization_data, shutdown_visualization
 
-from rerun_view import compress_images, start_rerun
+from rerun_view import compress_images, replay_rrd, start_rerun
 
 FOLLOWER_PORT = "/dev/ttyACM1"
 FOLLOWER_ID = "YutongZhu_awesome_follower_arm"
@@ -43,13 +43,19 @@ def parse_args():
     view.add_argument(
         "--web-view",
         action="store_true",
-        help="Serve a Rerun web viewer on this machine. Open the printed URL on the computer.",
+        help="Record a clip to an .rrd, then open it in a Rerun web viewer.",
     )
     parser.add_argument(
         "--web-port",
         type=int,
         default=9090,
         help="HTTP port for --web-view. Default is 9090.",
+    )
+    parser.add_argument(
+        "--duration",
+        type=float,
+        default=None,
+        help="Seconds to run. Default is 60 with --web-view, otherwise until Ctrl+C.",
     )
     return parser.parse_args()
 
@@ -72,7 +78,7 @@ def main():
         id=LEADER_ID,
     )
 
-    start_rerun(
+    rrd_path = start_rerun(
         "teleoperation",
         remote_view=args.remote_view,
         web_view=args.web_view,
@@ -80,13 +86,19 @@ def main():
         rerun_port=args.rerun_port,
         web_port=args.web_port,
     )
+    duration = args.duration
+    if duration is None:
+        duration = 60.0 if args.web_view else 0.0
+    if duration > 0:
+        print(f"Recording {duration:.0f}s, then Rerun replay. Ctrl+C to stop early.")
 
     robot = SO101Follower(robot_config)
     teleop_device = SO101Leader(teleop_config)
+    t_end = None if duration <= 0 else time.perf_counter() + duration
     try:
         robot.connect()
         teleop_device.connect()
-        while True:
+        while t_end is None or time.perf_counter() < t_end:
             start_time = time.perf_counter()
 
             observation = robot.get_observation()
@@ -111,6 +123,8 @@ def main():
         if robot.is_connected:
             robot.disconnect()
         shutdown_visualization("rerun")
+        if rrd_path is not None:
+            replay_rrd(rrd_path, web_port=args.web_port, probe_host=args.rerun_ip)
 
 
 if __name__ == "__main__":
