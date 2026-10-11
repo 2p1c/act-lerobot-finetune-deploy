@@ -4,17 +4,21 @@ from __future__ import annotations
 
 import os
 import socket
+import threading
 import time
 from urllib.parse import quote
+
+import numpy as np
 
 from lerobot.utils import rerun_visualization, visualization_utils
 from lerobot.utils.rerun_visualization import log_rerun_data
 from lerobot.utils.visualization_utils import init_visualization
 
 DEFAULT_WEB_PORT = 9090
-# Two 640x480 streams at 30 Hz fill the gRPC queue; the web viewer then blocks
-# the control loop. Live view only needs a few frames per second.
+# Live view is for spotting the scene, not training. Shrink and JPEG-compress
+# off the control thread so a slow browser cannot stall the arm.
 WEB_VIZ_HZ = 1.0
+WEB_VIZ_STRIDE = 4  # 640x480 -> 160x120
 
 
 def lan_ip(probe_host: str) -> str:
@@ -78,21 +82,44 @@ def _start_web(session_name: str, grpc_port: int, web_port: int, probe_host: str
     rr.serve_web_viewer(open_browser=False, web_port=web_port, connect_to=connect_uri)
     page = f"http://{host}:{web_port}/?url={quote(connect_uri, safe='')}"
     print(f"Rerun web viewer: {page}")
-    print(f"Live view is {WEB_VIZ_HZ:.0f} Hz so the arm loop is not blocked by the browser.")
+    print(f"Live view is {WEB_VIZ_HZ:.0f} Hz, JPEG, 160x120, sent off the control thread.")
     print("Open that URL on the computer. Do not start a native Rerun window.")
+
+
+def _shrink_observation(observation):
+    if not observation:
+        return observation
+    out = dict(observation)
+    for key, value in observation.items():
+        if isinstance(value, np.ndarray) and value.ndim == 3:
+            out[key] = np.ascontiguousarray(value[::WEB_VIZ_STRIDE, ::WEB_VIZ_STRIDE])
+    return out
 
 
 def _install_viz_throttle(hz: float) -> None:
     period = 1.0 / hz
     last = {"t": 0.0}
+    busy = threading.Lock()
     orig = rerun_visualization.log_rerun_data
+
+    def send(observation, action):
+        try:
+            orig(observation=observation, action=action, compress_images=True)
+        finally:
+            busy.release()
 
     def throttled(*args, **kwargs):
         now = time.perf_counter()
         if now - last["t"] < period:
             return
+        if not busy.acquire(blocking=False):
+            return
         last["t"] = now
-        return orig(*args, **kwargs)
+        observation = _shrink_observation(kwargs.get("observation", args[0] if args else None))
+        action = kwargs.get("action", args[1] if len(args) > 1 else None)
+        if action is not None:
+            action = dict(action)
+        threading.Thread(target=send, args=(observation, action), daemon=True).start()
 
     rerun_visualization.log_rerun_data = throttled
     visualization_utils.log_rerun_data = throttled
