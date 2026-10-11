@@ -64,7 +64,7 @@ args=(
 
   # 相机名字、分辨率必须和录数据时一样，否则处理器对不上图像。
   # 模型输入键是 observation.images.wrist 和 observation.images.front。
-  --robot.cameras="{ wrist: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30}, front: {type: opencv, index_or_path: /dev/video2, width: 640, height: 480, fps: 30}}"
+  --robot.cameras="{ wrist: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30, rotation: 90}, front: {type: opencv, index_or_path: /dev/video2, width: 640, height: 480, fps: 30}}"
 
   # 录数据是 30 Hz。训练时 chunk_size=100、n_action_steps=100：一次推理给出 100 步，
   # 大约 3.3 秒才再看相机。temporal ensembling 要求每步都推理（n_action_steps=1），

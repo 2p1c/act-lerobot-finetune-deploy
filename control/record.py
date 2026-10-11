@@ -10,6 +10,7 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
+from lerobot.cameras.configs import Cv2Rotation
 from lerobot.cameras.opencv import OpenCVCameraConfig
 from lerobot.utils.keyboard_input import init_keyboard_listener
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
@@ -134,7 +135,13 @@ def main():
     cameras = {}
     if not args.no_camera:
         cameras = {
-            "wrist": OpenCVCameraConfig(index_or_path=0, width=640, height=480, fps=30),
+            "wrist": OpenCVCameraConfig(
+                index_or_path=0,
+                width=640,
+                height=480,
+                fps=30,
+                rotation=Cv2Rotation.ROTATE_90,
+            ),
             "front": OpenCVCameraConfig(index_or_path="/dev/video2", width=640, height=480, fps=30),
         }
 

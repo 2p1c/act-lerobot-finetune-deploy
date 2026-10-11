@@ -7,6 +7,7 @@ https://huggingface.co/docs/lerobot/main/en/il_robots
 import argparse
 import time
 
+from lerobot.cameras.configs import Cv2Rotation
 from lerobot.cameras.opencv import OpenCVCameraConfig
 from lerobot.robots.so_follower import SO101Follower, SO101FollowerConfig
 from lerobot.teleoperators.so_leader import SO101Leader, SO101LeaderConfig
@@ -65,7 +66,13 @@ def main():
     cameras = {}
     if not args.no_camera:
         cameras = {
-            "wrist": OpenCVCameraConfig(index_or_path=0, width=640, height=480, fps=30),
+            "wrist": OpenCVCameraConfig(
+                index_or_path=0,
+                width=640,
+                height=480,
+                fps=30,
+                rotation=Cv2Rotation.ROTATE_90,
+            ),
             "front": OpenCVCameraConfig(index_or_path="/dev/video2", width=640, height=480, fps=30),
         }
     robot_config = SO101FollowerConfig(
