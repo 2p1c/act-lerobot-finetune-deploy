@@ -14,7 +14,7 @@ from lerobot.utils.visualization_utils import init_visualization
 DEFAULT_WEB_PORT = 9090
 # Two 640x480 streams at 30 Hz fill the gRPC queue; the web viewer then blocks
 # the control loop. Live view only needs a few frames per second.
-WEB_VIZ_HZ = 5.0
+WEB_VIZ_HZ = 1.0
 
 
 def lan_ip(probe_host: str) -> str:
