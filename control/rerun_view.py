@@ -59,7 +59,13 @@ def _start_web(session_name: str, grpc_port: int, web_port: int, probe_host: str
     os.environ.setdefault("RERUN_FLUSH_NUM_BYTES", "8000")
     rr.init(session_name)
     host = lan_ip(probe_host)
-    rr.serve_grpc(grpc_port=grpc_port)
+    origin = f"http://{host}:{web_port}"
+    # Browser page is :web_port, data is :grpc_port. Different ports are different
+    # origins; Rerun otherwise only allows localhost and rerun.io.
+    rr.serve_grpc(
+        grpc_port=grpc_port,
+        cors_allow_origin=[origin, f"http://{host}:*", "http://127.0.0.1:*", "*"],
+    )
     connect_uri = f"rerun+http://{host}:{grpc_port}/proxy"
     rr.serve_web_viewer(open_browser=False, web_port=web_port, connect_to=connect_uri)
     page = f"http://{host}:{web_port}/?url={quote(connect_uri, safe='')}"

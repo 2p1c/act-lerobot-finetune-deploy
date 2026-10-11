@@ -178,14 +178,13 @@ def main():
     )
     send_compressed = compress_images(args.remote_view, args.web_view)
 
-    robot.connect()
-    teleop.connect()
-
     teleop_action_processor, robot_action_processor, robot_observation_processor = make_default_processors()
     timer = CycleTimer(FPS)
     completed = False
 
     try:
+        robot.connect()
+        teleop.connect()
         episode_idx = 0
         while episode_idx < args.num_episodes and not events["stop_recording"]:
             log_say(f"Recording episode {episode_idx + 1} of {args.num_episodes}")

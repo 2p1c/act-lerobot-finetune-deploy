@@ -83,10 +83,9 @@ def main():
 
     robot = SO101Follower(robot_config)
     teleop_device = SO101Leader(teleop_config)
-    robot.connect()
-    teleop_device.connect()
-
     try:
+        robot.connect()
+        teleop_device.connect()
         while True:
             start_time = time.perf_counter()
 
@@ -107,8 +106,10 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        teleop_device.disconnect()
-        robot.disconnect()
+        if teleop_device.is_connected:
+            teleop_device.disconnect()
+        if robot.is_connected:
+            robot.disconnect()
         shutdown_visualization("rerun")
 
 
