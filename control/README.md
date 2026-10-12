@@ -9,7 +9,7 @@
 | Follower（被带动的臂） | `/dev/ttyACM1` | `YutongZhu_awesome_follower_arm` |
 | Leader（用手掰的臂） | `/dev/ttyACM0` | `YutongZhu_awesome_leader_arm` |
 | 腕部相机 | 索引 0，采集 640×480，顺时针 90° 后为 480×640 | 数据集里的名字是 `wrist` |
-| 场景相机 | `/dev/video2`，640×480 | 数据集里的名字是 `front` |
+| 场景相机 | `/dev/video2`，采集 640×480，顺时针 90° 后为 480×640 | 数据集里的名字是 `front` |
 
 先确认 USB 没有对调：
 

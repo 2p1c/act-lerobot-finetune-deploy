@@ -73,7 +73,13 @@ def main():
                 fps=30,
                 rotation=Cv2Rotation.ROTATE_90,
             ),
-            "front": OpenCVCameraConfig(index_or_path="/dev/video2", width=640, height=480, fps=30),
+            "front": OpenCVCameraConfig(
+                index_or_path="/dev/video2",
+                width=480,
+                height=640,
+                fps=30,
+                rotation=Cv2Rotation.ROTATE_90,
+            ),
         }
     robot_config = SO101FollowerConfig(
         port=FOLLOWER_PORT,
