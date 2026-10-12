@@ -13,10 +13,11 @@ RUN apt-get update \
 # A plain pip install can replace this image's torch with the PyPI wheel,
 # which has been CUDA 13 since PyTorch 2.11. Pin the image's own build.
 RUN python -c 'import pathlib, torch, torchvision; pathlib.Path("/tmp/constraints.txt").write_text(f"torch=={torch.__version__}\ntorchvision=={torchvision.__version__}\n")' \
-    && pip install -c /tmp/constraints.txt "lerobot[diffusion,pi,training]==0.6.2" \
+    && pip install -c /tmp/constraints.txt "lerobot[diffusion,pi,training]==0.6.2" tensorboard \
     && python -c 'import torch, lerobot; cuda = torch.version.cuda; assert cuda and cuda.startswith("12.8"), cuda; print(f"lerobot {lerobot.__version__}, torch {torch.__version__}, cuda {cuda}")'
 
 COPY train.sh /usr/local/bin/train
+COPY log_train_metrics.py /usr/local/bin/log_train_metrics.py
 RUN chmod +x /usr/local/bin/train
 
 WORKDIR /workspace

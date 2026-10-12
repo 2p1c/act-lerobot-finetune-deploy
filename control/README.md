@@ -163,9 +163,17 @@ python replay.py --dataset-name so101-pick-cube --episode 0
 
 `teleoperate_with_cameras.py` 只做实时遥操作，不写数据集。
 
-## 9. 推理
+## 9. 训练和推理
 
-任务名对应训练输出目录 `~/outputs/act/<任务名>/checkpoints/last/pretrained_model`。手臂和相机配置写在 `rollout.sh` 里，换任务只换第一个参数：
+换任务只换第一个参数。训练：
+
+```bash
+bash ../train/train.sh so101-adjust-bottle
+```
+
+数据集是 `yutongzhu/<任务名>`，checkpoint 写到 `~/outputs/act/<任务名>`。训练开始后用电脑浏览器打开终端打印的 TensorBoard 地址（默认 `http://<开发板>:6006/`）看 loss 和每步延迟。
+
+推理时任务名对应 `~/outputs/act/<任务名>/checkpoints/last/pretrained_model`。手臂和相机配置写在 `rollout.sh` 里：
 
 ```bash
 bash rollout.sh so101-adjust-bottle
