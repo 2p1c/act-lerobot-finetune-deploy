@@ -136,7 +136,7 @@ def _start_tensorboard(logdir: Path) -> subprocess.Popen | None:
     cmd = [
         sys.executable,
         "-m",
-        "tensorboard",
+        "tensorboard.main",
         "--logdir",
         str(logdir),
         "--port",
@@ -172,7 +172,8 @@ def _start_tensorboard(logdir: Path) -> subprocess.Popen | None:
 def main() -> None:
     global _writer
     output_dir = _output_dir_from_argv()
-    tb_dir = output_dir / "tb"
+    # Sibling dir so we do not create output_dir before lerobot-train checks it.
+    tb_dir = output_dir.parent / f"{output_dir.name}_tb"
     tb_dir.mkdir(parents=True, exist_ok=True)
     if SummaryWriter is None:
         print("未安装 tensorboard，只训练、不画曲线。需要时: pip install tensorboard", flush=True)
