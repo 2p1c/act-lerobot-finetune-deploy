@@ -180,7 +180,10 @@ bash rollout.sh so101-adjust-bottle
 bash rollout.sh so101-adjust-bottle --fp16
 bash rollout.sh so101-pick-cube --duration=30
 bash rollout.sh so101-pick-cube-clean --web-view
+bash rollout.sh so101-pick-cube-clean --log-result
 ```
+
+`--log-result` 在手臂停下后询问这次是否成功，失败再问原因，然后把各阶段 `capture/pre/infer/send/loop` 的 p50/p99、整段耗时 `duration_s`、目标节拍和实际节拍追加到 `~/outputs/act/<任务名>/rollout_results.json`。多次运行写进同一个文件。和 `--web-view` 一起用时，先记结果再开网页回放。
 
 `--web-view` 和录数据一样：推理时只在开发板写 `.rrd`（JPEG 压缩两路图像），结束后终端会打印网页地址，例如 `http://192.168.18.x:9090`。电脑不用先开 Rerun。这会多一点 CPU，比直播小很多；终端里的 `loop` 和超时率能看出有没有挤出 33 ms。
 

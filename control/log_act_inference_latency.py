@@ -17,9 +17,12 @@ from __future__ import annotations
 
 import argparse
 import atexit
+import json
 import sys
 import time
 from contextlib import nullcontext
+from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -42,6 +45,11 @@ _web_port = DEFAULT_WEB_PORT
 _rerun_ip = "192.168.18.9"
 _rerun_port = 9876
 _rrd_path = None
+_log_result = False
+_run_t0 = None
+_run_t1 = None
+_task_name = ""
+_summary_printed = False
 
 _orig_run = BaseStrategy.run
 _orig_select_action = ACTPolicy.select_action
@@ -98,7 +106,7 @@ def _timed_select_action(self, batch):
 
 
 def _timed_run(self, ctx):
-    global _fps
+    global _fps, _run_t0, _run_t1
     _fps = float(ctx.runtime.cfg.fps)
     robot = ctx.hardware.robot_wrapper
     orig_get_obs = robot.get_observation
@@ -119,31 +127,121 @@ def _timed_run(self, ctx):
 
     robot.get_observation = timed_get_observation
     robot.send_action = timed_send_action
+    _run_t0 = time.perf_counter()
     try:
         return _orig_run(self, ctx)
     finally:
+        _run_t1 = time.perf_counter()
         robot.get_observation = orig_get_obs
         robot.send_action = orig_send
 
 
+def _stage_stats() -> dict | None:
+    if not _rec["loop"]:
+        return None
+    rec = {k: np.array(v[_WARMUP_STEPS:] or v) for k, v in _rec.items()}
+    period_ms = 1000.0 / _fps
+    loop = rec["loop"]
+    p50 = {k: round(float(np.percentile(v, 50)), 1) for k, v in rec.items()}
+    p99 = {k: round(float(np.percentile(v, 99)), 1) for k, v in rec.items()}
+    cadence_hz = round(1000.0 / max(float(np.mean(loop)), period_ms), 2)
+    return {
+        "p50_ms": p50,
+        "p99_ms": p99,
+        "target_hz": round(_fps, 2),
+        "cadence_hz": cadence_hz,
+        "timeout_rate": round(float((loop > period_ms).mean()), 4),
+    }
+
+
 def _print_summary() -> None:
+    global _summary_printed
+    if _summary_printed:
+        return
+    _summary_printed = True
     if not _rec["loop"]:
         print("[tick] no control ticks recorded", flush=True)
         return
-    period_ms = 1000.0 / _fps
     rec = {k: np.array(v[_WARMUP_STEPS:] or v) for k, v in _rec.items()}
     print(
         {k: np.percentile(v, [50, 95, 99]).round(1).tolist() for k, v in rec.items()},
         flush=True,
     )
-    loop = rec["loop"]
+    stats = _stage_stats()
     print(
         "超时率:",
-        float((loop > period_ms).mean()),
+        stats["timeout_rate"],
         "实际频率约:",
-        1000.0 / max(float(np.mean(loop)), period_ms),
+        stats["cadence_hz"],
         flush=True,
     )
+
+
+def _result_json_path() -> Path:
+    if _task_name:
+        return Path.home() / "outputs" / "act" / _task_name / "rollout_results.json"
+    return Path.home() / "outputs" / "act" / "rollout_results.json"
+
+
+def _ask_success() -> tuple[bool | None, str]:
+    print("这次任务成功了吗？[y/n]", flush=True)
+    try:
+        answer = input().strip().lower()
+    except EOFError:
+        return None, ""
+    success = answer in {"y", "yes", "1", "是", "成功"}
+    if success:
+        return True, ""
+    if answer not in {"n", "no", "0", "否", "失败"}:
+        print(f"按失败记录（未识别: {answer}）", flush=True)
+    print("失败原因：", flush=True)
+    try:
+        reason = input().strip()
+    except EOFError:
+        reason = ""
+    return False, reason
+
+
+def _append_result(record: dict) -> Path:
+    path = _result_json_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows: list = []
+    if path.is_file():
+        text = path.read_text(encoding="utf-8").strip()
+        if text:
+            loaded = json.loads(text)
+            rows = loaded if isinstance(loaded, list) else [loaded]
+    rows.append(record)
+    path.write_text(json.dumps(rows, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def _save_result() -> None:
+    _print_summary()
+    stats = _stage_stats() or {
+        "p50_ms": {},
+        "p99_ms": {},
+        "target_hz": round(_fps, 2),
+        "cadence_hz": None,
+        "timeout_rate": None,
+    }
+    duration_s = None
+    if _run_t0 is not None and _run_t1 is not None:
+        duration_s = round(_run_t1 - _run_t0, 2)
+    success, reason = _ask_success()
+    record = {
+        "time": datetime.now().isoformat(timespec="seconds"),
+        "task": _task_name,
+        "success": success,
+        "failure_reason": reason or None,
+        "duration_s": duration_s,
+        "target_hz": stats["target_hz"],
+        "cadence_hz": stats["cadence_hz"],
+        "p50_ms": stats["p50_ms"],
+        "p99_ms": stats["p99_ms"],
+    }
+    path = _append_result(record)
+    print(f"已写入 {path}", flush=True)
 
 
 ACTPolicy.select_action = _timed_select_action
@@ -164,8 +262,17 @@ def _init_web_view(display_mode: str, *, session_name: str = "rollout", ip=None,
     )
 
 
+def _task_from_argv(argv: list[str]) -> str:
+    for i, token in enumerate(argv):
+        if token.startswith("--task="):
+            return token.split("=", 1)[1]
+        if token == "--task" and i + 1 < len(argv):
+            return argv[i + 1]
+    return ""
+
+
 def _parse_wrapper_args() -> None:
-    global _fp16, _web_view, _web_port, _rerun_ip, _rerun_port
+    global _fp16, _web_view, _web_port, _rerun_ip, _rerun_port, _log_result, _task_name
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         "--fp16",
@@ -177,15 +284,22 @@ def _parse_wrapper_args() -> None:
         action="store_true",
         help="Record a clip to an .rrd, then open it in a Rerun web viewer when rollout ends.",
     )
+    parser.add_argument(
+        "--log-result",
+        action="store_true",
+        help="After the run, ask success/failure and append timings to ~/outputs/act/<task>/rollout_results.json.",
+    )
     parser.add_argument("--web-port", type=int, default=DEFAULT_WEB_PORT)
     parser.add_argument("--rerun-ip", default="192.168.18.9")
     parser.add_argument("--rerun-port", type=int, default=9876)
     args, remaining = parser.parse_known_args()
     _fp16 = args.fp16
     _web_view = args.web_view
+    _log_result = args.log_result
     _web_port = args.web_port
     _rerun_ip = args.rerun_ip
     _rerun_port = args.rerun_port
+    _task_name = _task_from_argv(remaining)
     if _web_view:
         stripped = []
         for token in remaining:
@@ -207,7 +321,11 @@ def _parse_wrapper_args() -> None:
 
 if __name__ == "__main__":
     _parse_wrapper_args()
-    main()
+    try:
+        main()
+    finally:
+        if _log_result:
+            _save_result()
     if _web_view and _rrd_path is not None:
         replay_rrd(
             _rrd_path,

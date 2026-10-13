@@ -5,12 +5,15 @@
 #   bash control/rollout.sh so101-adjust-bottle --fp16
 #   bash control/rollout.sh so101-pick-cube --duration=30
 #   bash control/rollout.sh so101-pick-cube-clean --web-view
+#   bash control/rollout.sh so101-pick-cube-clean --log-result
 #
 # 第一个参数是任务名，对应训练输出目录：
 #   ${HOME}/outputs/act/<任务名>/checkpoints/last/pretrained_model
 # 其余参数原样传给 lerobot-rollout，可覆盖默认值，例如某个 checkpoint 或 --task。
 #
 # 终端每拍打印 capture/pre/infer/send/loop，结束时有 p50/p95/p99 和超时率。
+# --log-result 跑完后询问成功/失败，把各阶段 p50/p99、整段耗时和实际节拍
+# 追加到 ~/outputs/act/<任务名>/rollout_results.json。
 # --fp16 会用 torch.autocast("cuda", dtype=torch.float16) 包住 select_action。
 # 跑之前把物体和手臂摆回录数据时的起始状态，相机不要挪。
 # 脚本一连上 follower 就会打开力矩，手臂会自己动。手边留着急停。
