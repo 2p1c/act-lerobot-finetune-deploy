@@ -179,6 +179,9 @@ bash ../train/train.sh so101-adjust-bottle
 bash rollout.sh so101-adjust-bottle
 bash rollout.sh so101-adjust-bottle --fp16
 bash rollout.sh so101-pick-cube --duration=30
+bash rollout.sh so101-pick-cube-clean --web-view
 ```
+
+`--web-view` 和录数据一样：推理时只在开发板写 `.rrd`（JPEG 压缩两路图像），结束后终端会打印网页地址，例如 `http://192.168.18.x:9090`。电脑不用先开 Rerun。这会多一点 CPU，比直播小很多；终端里的 `loop` 和超时率能看出有没有挤出 33 ms。
 
 脚本一连上 follower 就会打开力矩。跑之前把物体和手臂摆回录数据时的起始状态。旧的单相机权重和现在的双相机对不上，不能拿来跑。

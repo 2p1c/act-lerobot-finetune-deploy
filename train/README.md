@@ -27,6 +27,19 @@ bash train/train.sh so101-adjust-bottle
 bash control/rollout.sh so101-adjust-bottle
 ```
 
+## 租用 GPU
+
+在这台 Mac 上启动，训完（或 Ctrl+C）会把 `last` 权重拉到本机 `~/outputs/act/<任务名>/checkpoints/last/pretrained_model`：
+
+```bash
+bash train/remote-train.sh so101-pick-cube-clean
+bash train/remote-train.sh so101-pick-cube-clean --overwrite
+bash train/remote-train.sh so101-pick-cube-clean --resume=true
+bash train/remote-train.sh --pull-only so101-pick-cube-clean
+```
+
+输出目录已存在时，LeRobot 不会覆盖。重新训练加 `--overwrite`（会删掉远程该任务的 checkpoint 和 TensorBoard）。接着上次的步数加 `--resume=true`。
+
 ## Docker
 
 镜像里是 CUDA 12.8、PyTorch 2.11 和 LeRobot 0.6.2。宿主机需要支持 CUDA 12.8 的 NVIDIA 驱动（570.86 及以上）和 NVIDIA Container Toolkit。

@@ -4,6 +4,7 @@
 #   bash control/rollout.sh so101-adjust-bottle
 #   bash control/rollout.sh so101-adjust-bottle --fp16
 #   bash control/rollout.sh so101-pick-cube --duration=30
+#   bash control/rollout.sh so101-pick-cube-clean --web-view
 #
 # 第一个参数是任务名，对应训练输出目录：
 #   ${HOME}/outputs/act/<任务名>/checkpoints/last/pretrained_model
@@ -86,11 +87,8 @@ args=(
   # 不在开发板上做语音提示。
   --play_sounds=false
 
-  # 要在电脑上看画面时，先在电脑上开 rerun --bind 0.0.0.0 --port 9876，
-  # 再把下面两行加进 args，并在启动前 unset 掉 http_proxy / https_proxy / all_proxy：
-  # --display_data=true
-  # --display_ip=192.168.18.9
-  # --display_port=9876
+  # 要看画面时加 --web-view：先把这一段记到开发板 ~/lerobot-rerun/*.rrd，
+  # 结束后开网页 Viewer，可以拖时间轴。不要用 --display_data 直播，两路相机会拖慢控制环。
 )
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -26,7 +26,10 @@ import torch
 
 from lerobot.policies.act.modeling_act import ACTPolicy
 from lerobot.rollout.strategies.base import BaseStrategy
+from lerobot.scripts import lerobot_rollout as rollout_mod
 from lerobot.scripts.lerobot_rollout import main
+
+from rerun_view import DEFAULT_WEB_PORT, replay_rrd, start_rerun
 
 _WARMUP_STEPS = 5
 _KEYS = ("capture", "pre", "infer", "send", "loop")
@@ -34,6 +37,11 @@ _rec = {k: [] for k in _KEYS}
 _t = {}
 _fps = 30.0
 _fp16 = False
+_web_view = False
+_web_port = DEFAULT_WEB_PORT
+_rerun_ip = "192.168.18.9"
+_rerun_port = 9876
+_rrd_path = None
 
 _orig_run = BaseStrategy.run
 _orig_select_action = ACTPolicy.select_action
@@ -143,16 +151,55 @@ BaseStrategy.run = _timed_run
 atexit.register(_print_summary)
 
 
+def _init_web_view(display_mode: str, *, session_name: str = "rollout", ip=None, port=None) -> None:
+    global _rrd_path
+    if display_mode != "rerun":
+        raise SystemExit("--web-view 只支持 Rerun，不要同时设 --display_mode。")
+    _rrd_path = start_rerun(
+        session_name,
+        web_view=True,
+        rerun_ip=_rerun_ip,
+        rerun_port=_rerun_port,
+        web_port=_web_port,
+    )
+
+
 def _parse_wrapper_args() -> None:
-    global _fp16
+    global _fp16, _web_view, _web_port, _rerun_ip, _rerun_port
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         "--fp16",
         action="store_true",
         help="Run ACT select_action under torch.autocast(cuda, float16).",
     )
+    parser.add_argument(
+        "--web-view",
+        action="store_true",
+        help="Record a clip to an .rrd, then open it in a Rerun web viewer when rollout ends.",
+    )
+    parser.add_argument("--web-port", type=int, default=DEFAULT_WEB_PORT)
+    parser.add_argument("--rerun-ip", default="192.168.18.9")
+    parser.add_argument("--rerun-port", type=int, default=9876)
     args, remaining = parser.parse_known_args()
     _fp16 = args.fp16
+    _web_view = args.web_view
+    _web_port = args.web_port
+    _rerun_ip = args.rerun_ip
+    _rerun_port = args.rerun_port
+    if _web_view:
+        stripped = []
+        for token in remaining:
+            if token.startswith(
+                ("--display_data", "--display_compressed_images", "--display_ip", "--display_port")
+            ):
+                continue
+            stripped.append(token)
+        remaining = [
+            "--display_data=true",
+            "--display_compressed_images=true",
+            *stripped,
+        ]
+        rollout_mod.init_visualization = _init_web_view
     sys.argv = [sys.argv[0], *remaining]
     if _fp16:
         print("[tick] FP16 autocast enabled for select_action", flush=True)
@@ -161,3 +208,10 @@ def _parse_wrapper_args() -> None:
 if __name__ == "__main__":
     _parse_wrapper_args()
     main()
+    if _web_view and _rrd_path is not None:
+        replay_rrd(
+            _rrd_path,
+            web_port=_web_port,
+            grpc_port=_rerun_port,
+            probe_host=_rerun_ip,
+        )
