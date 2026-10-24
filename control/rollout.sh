@@ -65,7 +65,7 @@ args=(
 
   # follower 的串口和校准 ID，和 record.py 一致。ID 用来找校准文件，错了手臂会按错误的角度动。
   --robot.type=so101_follower
-  --robot.port=/dev/ttyACM1
+  --robot.port=/dev/ttyACM0
   --robot.id=YutongZhu_awesome_follower_arm
 
   # 相机名字、分辨率必须和录数据时一样，否则处理器对不上图像。
