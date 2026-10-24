@@ -6,6 +6,7 @@
 #   bash control/rollout.sh so101-pick-cube --duration=30
 #   bash control/rollout.sh so101-pick-cube-clean --web-view
 #   bash control/rollout.sh so101-pick-cube-clean --log-result
+#   bash control/rollout.sh so101-pick-cube-clean --log-result=ensemble.json
 #
 # 第一个参数是任务名，对应训练输出目录：
 #   ${HOME}/outputs/act/<任务名>/checkpoints/last/pretrained_model
@@ -14,6 +15,7 @@
 # 终端每拍打印 capture/pre/infer/send/loop，结束时有 p50/p95/p99 和超时率。
 # --log-result 跑完后询问成功/失败，把各阶段 p50/p99、整段耗时和实际节拍
 # 追加到 ~/outputs/act/<任务名>/rollout_results.json。
+# --log-result=ensemble.json 换文件名，仍在同一目录；也可写绝对路径。
 # --fp16 会用 torch.autocast("cuda", dtype=torch.float16) 包住 select_action。
 # 跑之前把物体和手臂摆回录数据时的起始状态，相机不要挪。
 # 脚本一连上 follower 就会打开力矩，手臂会自己动。手边留着急停。

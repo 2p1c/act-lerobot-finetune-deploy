@@ -46,6 +46,7 @@ _rerun_ip = "192.168.18.9"
 _rerun_port = 9876
 _rrd_path = None
 _log_result = False
+_result_json = "rollout_results.json"
 _run_t0 = None
 _run_t1 = None
 _task_name = ""
@@ -178,9 +179,15 @@ def _print_summary() -> None:
 
 
 def _result_json_path() -> Path:
+    path = Path(_result_json).expanduser()
+    if path.suffix != ".json":
+        path = path.with_name(path.name + ".json")
+    if path.is_absolute() or len(path.parts) > 1:
+        return path
+    parent = Path.home() / "outputs" / "act"
     if _task_name:
-        return Path.home() / "outputs" / "act" / _task_name / "rollout_results.json"
-    return Path.home() / "outputs" / "act" / "rollout_results.json"
+        parent = parent / _task_name
+    return parent / path.name
 
 
 def _ask_success() -> tuple[bool | None, str]:
@@ -272,7 +279,7 @@ def _task_from_argv(argv: list[str]) -> str:
 
 
 def _parse_wrapper_args() -> None:
-    global _fp16, _web_view, _web_port, _rerun_ip, _rerun_port, _log_result, _task_name
+    global _fp16, _web_view, _web_port, _rerun_ip, _rerun_port, _log_result, _result_json, _task_name
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         "--fp16",
@@ -286,8 +293,13 @@ def _parse_wrapper_args() -> None:
     )
     parser.add_argument(
         "--log-result",
-        action="store_true",
-        help="After the run, ask success/failure and append timings to ~/outputs/act/<task>/rollout_results.json.",
+        nargs="?",
+        const="rollout_results.json",
+        default=None,
+        metavar="JSON",
+        help="After the run, ask success/failure and append timings. "
+        "Default file is ~/outputs/act/<task>/rollout_results.json. "
+        "Pass a name to use that file in the same directory, or a path.",
     )
     parser.add_argument("--web-port", type=int, default=DEFAULT_WEB_PORT)
     parser.add_argument("--rerun-ip", default="192.168.18.9")
@@ -295,7 +307,11 @@ def _parse_wrapper_args() -> None:
     args, remaining = parser.parse_known_args()
     _fp16 = args.fp16
     _web_view = args.web_view
-    _log_result = args.log_result
+    _log_result = args.log_result is not None
+    if args.log_result:
+        if args.log_result.startswith("-"):
+            raise SystemExit("文件名不要以 - 开头，写成 --log-result=ensemble.json")
+        _result_json = args.log_result
     _web_port = args.web_port
     _rerun_ip = args.rerun_ip
     _rerun_port = args.rerun_port
