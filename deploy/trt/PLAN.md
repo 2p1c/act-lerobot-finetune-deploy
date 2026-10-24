@@ -110,20 +110,25 @@ class ActForward(torch.nn.Module):
 4. `config = builder.create_builder_config()`；`--fp16` 时 `config.set_flag(trt.BuilderFlag.FP16)`；工作区 `config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 1 << 30)`（这一行在 Jetson 上必须加，见第 3 步的坑）
 5. `serialized = builder.build_serialized_network(network, config)`，写到 `.engine`
 
-**环境**：TensorRT 只在系统 Python 里。第一次先做一件事，让 conda 环境能 import 到它：
-
-```bash
-echo /usr/lib/python3.10/dist-packages/tensorrt/.. > $(python -c "import site;print(site.getsitepackages()[0])")/system_trt.pth
-python -c "import tensorrt; print(tensorrt.__version__)"   # 期望 10.3.0
-```
-
-（两边都是 Python 3.10，所以能直接用。这一行会把整个系统 dist-packages 加进来；如果和 conda 里的包冲突，改成只软链 `tensorrt` 这一个目录。）
+**环境**：构建不需要 torch，直接用系统 Python 跑：`/usr/bin/python3 deploy/trt/build_engine.py ...`。
 
 **过关标准**：生成的 engine 用 `trtexec --loadEngine=...` 测出来和第 3 步差不多。
+
+**实测（2026-10-24）**：手写版 FP16 构建 468 s，峰值 CPU 内存 4986 MiB，engine 72.5 MB（权重 68.6 MB，激活 27 MB）。parser 得到 4925 层，`--loadEngine` 测 GPU Compute median 9.2 / p99 9.7 ms，和 trtexec 版的 9.6 ms 一致。
 
 **要能回答**：Builder、Network、Parser、BuilderConfig 各自负责什么？FP16 flag 是「强制 FP16」还是「允许 FP16」？
 
 ## 第 5 步：手写推理 `trt_infer.py`（核心）
+
+**环境**：这一步同时要 torch 和 TensorRT。只软链 `tensorrt` 这一个包进 conda 环境，不把整个系统 dist-packages 加进来（避免系统的 numpy 等包混进来）：
+
+```bash
+mkdir -p ~/trt_py && ln -sfn /usr/lib/python3.10/dist-packages/tensorrt ~/trt_py/tensorrt
+echo ~/trt_py > $(python -c "import site;print(site.getsitepackages()[0])")/system_trt.pth
+python -c "import torch, tensorrt; print(torch.__version__, tensorrt.__version__)"   # 期望 2.8.0 10.3.0
+```
+
+已用临时 PYTHONPATH 验证过：torch 2.8 和 TensorRT 10.3 可以在同一进程里用，能正常反序列化 engine。FP16 engine 的输入输出仍然是 FLOAT（FP32）。
 
 **你要写的**：一个类，大约 35 行。不用 pycuda，显存直接用 torch 张量：
 

@@ -21,7 +21,7 @@ def main():
   if not parser.parse_from_file(args.onnx):
     for i in range(parser.num_errors):
       print("ONNX 解析错误:", parser.get_error(i))
-      sys.exit(1)
+    sys.exit(1)
 
   for i in range(network.num_inputs):
       t = network.get_input(i)
