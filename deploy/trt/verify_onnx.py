@@ -27,7 +27,7 @@ def main():
   feeds = {
     "state": state.numpy(),
     "wrist": wrist.numpy(),
-    "front": wrist.numpy(),
+    "front": front.numpy(),
   }
 
   out_onnx = sess.run(["actions"], feeds)[0]
