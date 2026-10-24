@@ -25,7 +25,7 @@ batch = {
 def run():
   return policy.model(batch)[0]
 
-def profiler(fn):
+def profiler(fn, warmup=20):
   for _ in range(warmup):
     fn()
   torch.cuda.synchronize()
