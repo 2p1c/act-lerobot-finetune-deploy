@@ -171,6 +171,8 @@ bash control/rollout.sh so101-pick-cube-clean --trt=$HOME/Projects/pi0-lerobot-f
   --policy.temporal_ensemble_coeff=0.01 --log-result=trt_ensemble.json
 ```
 
+**实测 6a（2026-10-24，FP16 engine，51 帧 × 100 步）**：归一化空间 max diff 0.026（是 randn 时的 9 倍）；关节误差 mean 0.016°、max 0.26°（elbow_flex）；夹爪 max 0.33（单位是 0–100 开合百分比，不是度）。均值小于舵机一步（≈0.09°）。
+
 **过关标准**：6a 关节误差均值 < 0.5°、最大 < 2°；6c 终端每拍 `infer` 稳定小于 33 ms，超时率接近 0，实际频率约 30 Hz。
 
 ## 第 7 步：评估与总结
