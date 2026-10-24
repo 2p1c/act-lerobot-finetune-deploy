@@ -15,6 +15,7 @@ its args.
 
 from __future__ import annotations
 
+import os
 import argparse
 import atexit
 import json
@@ -55,6 +56,16 @@ _summary_printed = False
 _orig_run = BaseStrategy.run
 _orig_select_action = ACTPolicy.select_action
 
+_trt_path = None
+_trt = None
+
+def _trt_predict_chunk(self, batch):
+    out = _trt(
+        batch["observation.state"],
+        batch["observation.images.wrist"],
+        batch["observation.images.front"],
+    )
+    return out.clone()   # 输出缓冲区每次都会被覆盖，交出去之前先复制
 
 def _ms(a: float, b: float) -> float:
     return (b - a) * 1000.0
@@ -279,8 +290,12 @@ def _task_from_argv(argv: list[str]) -> str:
 
 
 def _parse_wrapper_args() -> None:
-    global _fp16, _web_view, _web_port, _rerun_ip, _rerun_port, _log_result, _result_json, _task_name
+    global _fp16, _web_view, _web_port, _rerun_ip, _rerun_port, _log_result, _result_json, _task_name, _trt_path, _trt
     parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument(
+        "--trt", default=None, metavar="ENGINE",
+        help="Run ACT forward with a TensorRT engine instead of PyTorch."
+    )
     parser.add_argument(
         "--fp16",
         action="store_true",
