@@ -38,7 +38,7 @@ PyTorch 模型 ──(1)基线计时──▶ 67 ms?
       └─(7) 真机 24 次评估 ──▶ 成功率、延迟对比图、写成技能
 ```
 
-文件都放在 `deploy/trt/`，代码每个文件控制在 50 行左右。所有命令都在开发板上跑（`ssh nano0`，`conda activate lerobot-train`）。
+文件都放在 `deploy/trt/`，代码每个文件控制在 50 行左右。所有命令都在开发板上跑（`ssh nano0`，`conda activate lerobot-train`）。**不要用 `lerobot` 环境**：那里没有 onnx，torch 也用不了 GPU，原因见 `control/README.md` 第 2 节。
 
 ---
 

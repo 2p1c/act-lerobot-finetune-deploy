@@ -4,7 +4,7 @@ import collections
 import torch
 import onnx
 
-from lerobot.policies.modeling_act import ACTPolicy
+from lerobot.policies.act.modeling_act import ACTPolicy
 
 POLICY = os.path.expanduser(
     "~/outputs/act/so101-pick-cube-clean/checkpoints/last/pretrained_model"

@@ -46,6 +46,17 @@ cd ~/Projects/pi0-lerobot-finetune-deploy/control
 
 录制过程中这个 SSH 窗口要保持在前台，按键才会生效。
 
+开发板上有两个 conda 环境，用的是同一份 lerobot 源码（`~/Projects/lerobot`），分工固定：
+
+| 环境 | 用来做什么 | 关键版本 |
+|------|-----------|----------|
+| `lerobot` | `record.py`、`teleoperate_with_cameras.py`、`replay.py`，只用 CPU | Python 3.12，numpy 2，rerun-sdk 0.33.1，pynput |
+| `lerobot-train` | 训练、`rollout.sh`、`deploy/trt/` 里的 ONNX / TensorRT，用 GPU | Python 3.10，Jetson 版 torch 2.8（CUDA 12.6），numpy 1.26，onnx |
+
+`rollout.sh` 和 `train/train.sh` 会自己激活 `lerobot-train`，其余脚本要手动切到对应环境。
+
+两个环境合不成一个：rerun-sdk 0.24 起要求 numpy ≥ 2，而 Jetson 版 torch 2.8 按 numpy 1 编译，换成 numpy 2 会报 `Failed to initialize NumPy`。`lerobot` 环境里的 torch 是 CUDA 13 版，这块板子的驱动是 12.6，在那里 `torch.cuda.is_available()` 是 False。不要往任何一个环境里升级 numpy 或 torch。
+
 `--web-view` 不需要关代理，电脑上也先不用开 Rerun。只有 `--remote-view` 才必须先让局域网直连，否则开发板代理会把发往电脑的连接转到 `127.0.0.1:7897`：
 
 ```bash
