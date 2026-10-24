@@ -85,11 +85,13 @@ def main():
     out = run()
     print("输出形状：", tuple(out.shape))
 
+    profiler(run)
     bench_split(run)
     p50, p99, p1, p2, p5 = bench(run)
     print(f"FP32 p50={p50:.1f} ms p99={p99:.1f} ms p1={p1:.1f} ms p2={p2:.1f} ms p5={p5:.1f} ms")
 
     with torch.autocast("cuda", dtype=torch.float16):
+      profiler(run)
       bench_split(run)
       p50, p99, p1, p2, p5 = bench(run)
     print(f"FP16 p50={p50:.1f} ms p99={p99:.1f} ms p1={p1:.1f} ms p2={p2:.1f} ms p5={p5:.1f} ms")
