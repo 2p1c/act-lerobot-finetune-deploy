@@ -8,3 +8,9 @@ venv/
 
 .cache/
 *.log
+
+# 开发板上生成的产物：不进 git，部署时 rsync 也不会删
+*.onnx
+*.engine
+*.npz
+deploy/trt/layers_*.json

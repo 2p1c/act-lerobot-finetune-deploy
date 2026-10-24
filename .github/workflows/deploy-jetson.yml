@@ -77,10 +77,12 @@ jobs:
           SSH_KEY: ${{ secrets.JETSON_SSH_KEY }}
         run: |
           set -euo pipefail
+          # --delete 会删掉开发板上「仓库里没有」的文件。.gitignore 里的模式
+          # 同时作为 rsync 的排除规则：被排除的文件不传、也不删，
+          # 所以板子上生成的 onnx / engine / 日志会留下来。
           rsync -az --delete \
             --exclude '.git/' \
-            --exclude '.venv/' \
-            --exclude '__pycache__/' \
+            --exclude-from=.gitignore \
             -e "ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes" \
             ./ "${DEPLOY_HOST}:${DEPLOY_DIR}/"
           ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes "$DEPLOY_HOST" \
