@@ -18,7 +18,7 @@ class TrtAct:
 
     runtime = trt.Runtime(logger)
     with open(engine_path, "rb") as f:
-      self.engine = runtime.deserailize_cuda_engine(f.read())
+      self.engine = runtime.deserialize_cuda_engine(f.read())
     if self.engine is None:
       raise RuntimeError("engine 加载失败：" + engine_path)
 
