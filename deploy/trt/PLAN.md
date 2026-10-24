@@ -55,6 +55,8 @@ PyTorch 模型 ──(1)基线计时──▶ 67 ms?
 
 **过关标准**：打印 `fp32 p50/p99` 和 `fp16 p50/p99`，fp32 应接近 rollout 里的 67 ms。把结果记下来，这就是「优化前」。
 
+**实测（2026-10-24，MAXN_SUPER）**：FP32 p50 59.3 / p99 67.7 ms；autocast FP16 p50 46.7 / p99 52.6 ms。FP32 时 CPU 下发 41 ms，GPU 事件计时 59 ms。CPU 开销主要来自 `modeling_act.py:487-488` 的 `list(cam_features)`：每次 forward 切出约 1200 个小张量再 stack。
+
 **要能回答**：为什么不 `synchronize` 测出来的时间会偏小？
 
 ## 第 2 步：导出 ONNX `export_onnx.py`
