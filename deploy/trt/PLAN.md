@@ -94,6 +94,12 @@ class ActForward(torch.nn.Module):
 
 **要能回答**：engine 为什么不能从 2080 Ti 拷到 Jetson 上用？build 为什么要几分钟？
 
+**坑**：不限 workspace 时 FP32 构建 OOM（`NvMap ... error 12` → Myelin `ForeignNode` 找不到实现）。Jetson 的 CPU 和 GPU 共用 7.6 GB。先 `drop_caches`，再加 `--memPoolSize=workspace:1024`，另开一个终端跑 `tegrastats` 盯内存。构建峰值 RAM 约 5.2 GB。
+
+**实测 FP32 engine（2026-10-24）**：GPU Compute median 23.4 / p99 24.1 ms；Latency（含 H2D 0.45 ms）median 23.9 ms；Enqueue 2.2 ms。对比 PyTorch FP32：59.3 ms，CPU 下发 41 ms。
+
+**实测 FP16 engine（2026-10-24）**：GPU Compute median 9.6 / p99 10.4 ms；Latency median 10.1 ms；Enqueue 2.1 ms。engine 72 MB（FP32 是 144 MB）。融合后层数：ONNX 5403 个节点 → FP32 220 层、FP16 209 层（其中 `kgen` 约 95 层，是 Myelin 生成的融合 kernel）。精度还没验证，见第 5 步。
+
 ## 第 4 步：手写构建 `build_engine.py`
 
 **你要写的**：和第 3 步做同一件事，用 Python API。大约 25 行，固定这几步：
@@ -101,7 +107,7 @@ class ActForward(torch.nn.Module):
 1. `logger = trt.Logger(trt.Logger.WARNING)`
 2. `builder = trt.Builder(logger)`，`network = builder.create_network(0)`
 3. `parser = trt.OnnxParser(network, logger)`，`parser.parse(open(onnx, "rb").read())`，失败时把 `parser.get_error(i)` 都打出来
-4. `config = builder.create_builder_config()`；`--fp16` 时 `config.set_flag(trt.BuilderFlag.FP16)`；工作区 `config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 1 << 30)`
+4. `config = builder.create_builder_config()`；`--fp16` 时 `config.set_flag(trt.BuilderFlag.FP16)`；工作区 `config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 1 << 30)`（这一行在 Jetson 上必须加，见第 3 步的坑）
 5. `serialized = builder.build_serialized_network(network, config)`，写到 `.engine`
 
 **环境**：TensorRT 只在系统 Python 里。第一次先做一件事，让 conda 环境能 import 到它：
