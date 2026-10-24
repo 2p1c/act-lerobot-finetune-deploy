@@ -41,7 +41,7 @@ def main():
     print("Pytorch 输出形状:", tuple(out.shape))
 
     with torch.no_grad():
-        torch.onnx.export(wrapper, (state, wrist, front), ONNX_PATH, opset_version=17, dynamo=False, input_names=["state", "wrist", "front"], ouput_names=["actions"],)
+        torch.onnx.export(wrapper, (state, wrist, front), ONNX_PATH, opset_version=17, dynamo=False, input_names=["state", "wrist", "front"], output_names=["actions"],)
     print("已导出:", ONNX_PATH)
 
     onnx.checker.check_model(ONNX_PATH)
