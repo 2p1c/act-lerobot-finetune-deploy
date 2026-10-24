@@ -80,7 +80,7 @@ def main():
   policy = ACTPolicy.from_pretrained(POLICY)
   policy.to("cuda")
   policy.eval()
-  batch = {"observation.state": state, "oberservation.images": [wrist, front]}
+  batch = {"observation.state": state, "observation.images": [wrist, front]}
 
   trt_act = TrtAct(args.engine)
 
