@@ -152,18 +152,26 @@ class TrtAct:
 
 **过关标准**：FP32 engine 的 max diff 在 1e-3 量级；FP16 一般在 1e-2 量级。速度明显快于第 1 步。如果 FP16 误差很大，先查是不是 Softmax / LayerNorm 溢出。
 
+**实测 FP32 engine（2026-10-24，randn 输入，seed 0）**：max abs diff 9.9e-4，mean 3.1e-4，参考输出范围 [-0.685, 0.672]，无 nan。速度 p50 23.2 / p99 24.7 ms（同一脚本里 PyTorch FP32 是 60.1 ms）。注意 `TrtAct` 每次返回同一块 `self.out`，下一次调用会覆盖它，所以调用方要 `.clone()`。
+
+**实测 FP16 engine（同一组输入）**：max abs diff 2.8e-3（约为输出范围的 0.4%），mean 1.3e-3，无 nan。速度 p50 9.7 / p99 10.6 ms，PyTorch FP32 59.9 ms，**快 6.2 倍**。第 5 步过关；真实图像上的误差留到第 6 步再确认。
+
 **要能回答**：输入张量为什么要 `.contiguous()`？dtype 不是 float32 会怎样？为什么要用 torch 当前 stream？
 
 ## 第 6 步：接进真机控制环
 
-在 `control/log_act_inference_latency.py` 里加一个 `--trt <engine>` 参数，加载后把 `policy.model` 换成一个小包装：`forward(batch)` 里取出 state / 两张图，调 `TrtAct`，返回 `(actions, (None, None))`。预处理（归一化）和后处理（反归一化）都不用动，因为 engine 的输入输出就在归一化空间里。
+分三小步，先离线、再短跑、最后正式跑：
+
+- **6a 真实数据离线对比 `check_real.py`**：从本地数据集 `yutongzhu/so101-pick-cube-clean` 均匀取约 50 帧，经过策略预处理器后，分别用 PyTorch 和 TRT 求整段 chunk，反归一化后用「度」比较误差。不接手臂。
+- **6b 接进控制环**：在 `control/log_act_inference_latency.py` 里加 `--trt=<engine>`，替换 `ACTPolicy.predict_action_chunk`（lerobot 0.6.2 里 chunking 和 temporal ensemble 两条路径都调它）。输出要 `.clone()`。预处理和后处理都不动，因为 engine 的输入输出就在归一化空间里。结果 JSON 里记下 engine 名字。先不开 ensemble，短跑 15 秒，看手臂动作是否正常。
+- **6c 正式跑**：
 
 ```bash
-bash control/rollout.sh so101-pick-cube-clean --trt=deploy/trt/act_fp16.engine \
+bash control/rollout.sh so101-pick-cube-clean --trt=$HOME/Projects/pi0-lerobot-finetune-deploy/deploy/trt/act_fp16.engine \
   --policy.temporal_ensemble_coeff=0.01 --log-result=trt_ensemble.json
 ```
 
-**过关标准**：终端每拍 `infer` 稳定小于 33 ms，超时率接近 0，实际频率约 30 Hz。
+**过关标准**：6a 关节误差均值 < 0.5°、最大 < 2°；6c 终端每拍 `infer` 稳定小于 33 ms，超时率接近 0，实际频率约 30 Hz。
 
 ## 第 7 步：评估与总结
 
