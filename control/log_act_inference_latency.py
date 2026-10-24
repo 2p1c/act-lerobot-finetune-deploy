@@ -250,6 +250,7 @@ def _save_result() -> None:
     record = {
         "time": datetime.now().isoformat(timespec="seconds"),
         "task": _task_name,
+        "engine": os.path.basename(_trt_path) if _trt_path else None,
         "success": success,
         "failure_reason": reason or None,
         "duration_s": duration_s,
@@ -345,6 +346,17 @@ def _parse_wrapper_args() -> None:
             *stripped,
         ]
         rollout_mod.init_visualization = _init_web_view
+    if args.trt:
+        if args.fp16:
+            raise SystemExit("--trt 和 --fp16 不要一起用：engine 的精度在构建时已经定好了。")
+        _trt_path = os.path.expanduser(args.trt)
+        if not os.path.isfile(_trt_path):
+            raise SystemExit(f"找不到 engine: {_trt_path}")
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "deploy" / "trt"))
+        from trt_infer import TrtAct
+        _trt = TrtAct(_trt_path)                       # 连手臂之前就加载好
+        ACTPolicy.predict_action_chunk = _trt_predict_chunk
+        print(f"[tick] TensorRT engine: {_trt_path}", flush=True)
     sys.argv = [sys.argv[0], *remaining]
     if _fp16:
         print("[tick] FP16 autocast enabled for select_action", flush=True)
