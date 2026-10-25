@@ -173,6 +173,10 @@ bash control/rollout.sh so101-pick-cube-clean --trt=$HOME/Projects/pi0-lerobot-f
 
 **实测 6a（2026-10-24，FP16 engine，51 帧 × 100 步）**：归一化空间 max diff 0.026（是 randn 时的 9 倍）；关节误差 mean 0.016°、max 0.26°（elbow_flex）；夹爪 max 0.33（单位是 0–100 开合百分比，不是度）。均值小于舵机一步（≈0.09°）。
 
+**实测 6b（2026-10-24，FP16 engine，`n_action_steps=1` 不开 ensemble，15 s）**：infer p50/p95/p99 = 13.5/13.9/14.0 ms，loop 20.8/21.2/21.3 ms，445 拍超时 0，29.7 Hz。第一拍 infer 108.9 ms（首次执行的初始化，已被 warmup 排除）。infer 比 benchmark 的 9.7 ms 多约 4 ms：`select_action` 包装、`.clone()`、同步，以及每拍之间 GPU 空闲约 12 ms，可能导致降频。
+
+**实测 6c（2026-10-24，FP16 engine + temporal ensemble 0.01，49.3 s）**：infer p50/p95/p99 = 13.7/14.0/14.2 ms，loop 21.1/21.5/21.7 ms，1469 拍里 1 拍超预算（0.1%，最长 47.2 ms），29.8 Hz。对比 PyTorch + ensemble：infer 67.2 ms、loop 72.1 ms、13.8 Hz。
+
 **过关标准**：6a 关节误差均值 < 0.5°、最大 < 2°；6c 终端每拍 `infer` 稳定小于 33 ms，超时率接近 0，实际频率约 30 Hz。
 
 ## 第 7 步：评估与总结
