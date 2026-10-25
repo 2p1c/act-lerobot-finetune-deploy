@@ -5,6 +5,12 @@
 - 权重：[`yutongzhu/so101-pick-cube-clean`](https://huggingface.co/yutongzhu/so101-pick-cube-clean)
 - 数据集：[`yutongzhu/so101-pick-cube-clean`](https://huggingface.co/datasets/yutongzhu/so101-pick-cube-clean)（50 集，28160 帧）
 
+## 演示
+
+<a href="eval/so101-pick-cube-clean/videos/temporal_ensemble.mp4"><img src="eval/so101-pick-cube-clean/videos/temporal_ensemble_preview.gif" width="240" alt="SO-101 用 ACT 抓取方块"></a>
+
+ACT + temporal ensemble 抓取方块，PyTorch 推理，约 14 Hz。预览是 3 倍速，点击查看原视频（39 秒）。
+
 ## 结果
 
 同一个 ACT 权重，在 Jetson Orin Nano 8GB 上运行，控制目标 30 Hz（每拍 33.3 ms）。
